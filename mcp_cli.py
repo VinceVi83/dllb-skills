@@ -6,6 +6,16 @@ from mcp.client.stdio import stdio_client
 from ollama import chat
 
 class MCPClientBot:
+    """MCP Client Bot for Transport Assistant
+    
+    Role: Manages MCP (Model Context Protocol) client connections and executes transport-related agent tasks.
+    
+    Methods:
+        __init__(self, server_script="server_mcp.py") : Initialize the bot with MCP server script path.
+        connect(self) : Establish connection to the MCP server.
+        run_agent(self, user_content) : Execute agent with user content and handle tool calls.
+        close(self) : Close the MCP connection and cleanup resources.
+    """
     def __init__(self, server_script="server_mcp.py"):
         self.server_params = StdioServerParameters(
             command="python",
@@ -34,18 +44,7 @@ class MCPClientBot:
         tools_list = tools_response.tools
         resources_list = resources_response.resources
 
-        system_prompt = f"""
-Tu es un assistant spécialisé dans les transports.
-RÈGLES STRICTES :
-1. ANALYSE la demande de l'utilisateur.
-2. Si la demande concerne un trajet (bus, travail, maison), tu DOIS utiliser un outil de type 'call_tool'.
-3. Ne lis JAMAIS les ressources (config://app) sauf si tu ne peux ABSOLUMENT PAS répondre à la question sans lire la configuration.
-4. Si tu hésites, privilégie toujours l'action 'call_tool'.
-5. Réponds UNIQUEMENT en JSON.
-
-OUTILS DISPONIBLES :
-{[{"name": t.name, "description": t.__doc__, "parameters": t.inputSchema} for t in tools_list]}
-"""
+        system_prompt = self._build_system_prompt(tools_list)
 
         response = chat(
             model='batiai/qwen3.5-9b',
@@ -64,20 +63,14 @@ OUTILS DISPONIBLES :
         # print(response)
         decision = json.loads(response.message.content)
         
-        # On essaie d'extraire les informations de manière flexible
-        action = decision.get("action")
-        # On accepte "name" ou "tool"
-        name = decision.get("name") or decision.get("tool")
-        # On accepte "arguments" ou "parameters"
-        args = decision.get("arguments") or decision.get("parameters") or {}
+        action = self._get_action(decision)
+        name = self._get_tool_name(decision)
+        args = self._get_tool_args(decision)
 
-        # Logique d'exécution
         if action == "call_tool" or name:
             print(f"--- Calling Tool: {name} ---")
-            # Appel de l'outil avec les arguments extraits
             result = await self.session.call_tool(name, arguments=args)
             
-            # Extraction propre du contenu (la plupart des MCP renvoient une liste de TextContent)
             text_result = ""
             if result.content and hasattr(result.content[0], 'text'):
                 text_result = result.content[0].text
@@ -93,14 +86,53 @@ OUTILS DISPONIBLES :
             content = await self.session.read_resource(uri)
             return content.contents[0].text
 
+    def _build_system_prompt(self, tools_list):
+        tools_info = []
+        for tool in tools_list:
+            tools_info.append({
+                "name": tool.name,
+                "description": tool.__doc__,
+                "parameters": tool.inputSchema
+            })
+        
+        prompt_text = """
+You are a specialized transport assistant.
+STRICT RULES:
+1. ANALYZE the user's request.
+2. If the request concerns a trip (bus, work, home), you MUST use a 'call_tool' tool.
+3. NEVER read resources (config://app) unless you ABSOLUTELY CANNOT answer the question without reading the configuration.
+4. If you hesitate, always prioritize the 'call_tool' action.
+5. Respond ONLY in JSON.
+
+AVAILABLE TOOLS:
+"""
+        prompt_text += str(tools_info)
+        return prompt_text
+
+    def _get_action(self, decision):
+        return decision.get("action")
+
+    def _get_tool_name(self, decision):
+        name = decision.get("name")
+        if name is None:
+            name = decision.get("tool")
+        return name
+
+    def _get_tool_args(self, decision):
+        args = decision.get("arguments")
+        if args is None:
+            args = decision.get("parameters")
+        if args is None:
+            args = {}
+        return args
+
     async def close(self):
         await self.exit_stack.aclose()
 
 async def main():
     bot = MCPClientBot()
     await bot.connect()
-    
-    # Exécution séquentielle
+
     # print(await bot.run_agent("stp additionne 15 et 27"))
     # print(await bot.run_agent("stp soustrait 1058 et 888"))
     print(await bot.run_agent("bus notification to go work"))

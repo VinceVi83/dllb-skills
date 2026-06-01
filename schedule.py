@@ -4,8 +4,8 @@ from datetime import datetime
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-def ma_tache_quotidienne():
-    print(f"[{datetime.now()}] La tâche s'exécute !")
+def daily_task():
+    print(f"[{datetime.now()}] The task is running!")
 
 
 job_params = {k: v for k, v in vars(task).items() if k not in ['func', 'id']}
@@ -15,21 +15,16 @@ scheduler.add_job(
     **job_params         # Ce qui devient : trigger='cron', hour=6, minute=0
 )
 
-def modifier_horaire_via_chatbot(nouvelle_heure: int, nouvelle_minute: int):
-    """
-    Cette fonction sera appelée par ton chatbot lorsqu'un utilisateur
-    demande de changer l'heure.
-    """
+def modify_schedule_via_chatbot(new_hour: int, new_minute: int):
     try:
-        # On modifie le déclencheur de la tâche existante grâce à son ID
         scheduler.reschedule_job(
             job_id,
             trigger='cron',
             **new_time_params
         )
-        return f"Parfait ! La tâche a été reprogrammée à {nouvelle_heure:02d}h{nouvelle_minute:02d}."
+        return f"Perfect! The task has been rescheduled to {new_hour:02d}h{new_minute:02d}."
     except Exception as e:
-        return f"Erreur lors de la modification : {e}"
+        return f"Error during modification: {e}"
 
 def get_injected_prompt(template_name):
     template = getattr(cfg.agents, template_name, "")

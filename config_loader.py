@@ -2,10 +2,13 @@ import sys
 import logging
 import yaml
 import shutil
+import threading
+import requests
 from pathlib import Path
 from types import SimpleNamespace
 
 logger = logging.getLogger(__name__)
+
 
 class Utils:
     """Utility Functions for File Operations and Data Formatting
@@ -19,6 +22,7 @@ class Utils:
         to_str(data, key) : Convert value to string or return 'ERROR' on empty/None.
         enable_bypass() : Return bypass configuration flag.
     """
+    
     @staticmethod
     def get_unique_path(dir_path, base_name, extension=".wav"):
         directory = Path(dir_path)
@@ -75,8 +79,13 @@ class Utils:
 
         def post_request():
             try:
+                if channel is not None:
+                    channel_name = channel
+                else:
+                    channel_name = cfg.sys.discord.CHANNEL
+       
                 payload = {
-                    "channel_name": channel if channel else cfg.sys.discord.CHANNEL,
+                    "channel_name": channel_name,
                     "msg": message,
                     "attachments": files if files else []
                 }
@@ -88,20 +97,22 @@ class Utils:
 
         threading.Thread(target=post_request, daemon=True).start()
 
+
 class LocalFilesFilter(logging.Filter):
     
     def __init__(self):
         super().__init__()
         self.local_files = set()
         root_dir = cfg.root if hasattr(cfg, 'root') else Path(__file__).resolve().parent
+        
         for path in root_dir.rglob("*.py"):
             if "__pycache__" in path.parts:
                 continue
             for part in path.parts:
                 if part.startswith('.'):
                     break
-            else:
-                self.local_files.add(path.name)
+                else:
+                    self.local_files.add(path.name)
 
     def filter(self, record):
         return record.filename in self.local_files
@@ -148,25 +159,27 @@ class CfgConfig(SimpleNamespace):
         return self._format_object(self)
 
     def _format_object(self, obj, indent_level=0):
-
         spacing = "  " * indent_level
+        
         if isinstance(obj, (SimpleNamespace, CfgConfig)):
             items = vars(obj).items()
             if not items:
                 return "{}"
+
             lines = ["{"]
             for k, v in items:
                 formatted_value = self._format_object(v, indent_level + 1)
                 lines.append(spacing + "  " + '"' + k + '": ' + formatted_value + ',')
+
             lines[-1] = lines[-1].rstrip(',')
             lines.append(spacing + "}")
             return "\n".join(lines)
+
         if isinstance(obj, str):
             return '"' + obj + '"'
         return str(obj)
 
     def to_dict(self):
-
         result = {}
         for k, v in vars(self).items():
             if isinstance(v, CfgConfig):

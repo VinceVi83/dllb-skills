@@ -4,6 +4,21 @@ import os
 from rapidfuzz import fuzz
 
 class JSONProcessor:
+    """JSON File Processor and Filterer
+    
+    Role: Loads, displays, filters, and exports JSON data with pagination support.
+    
+    Methods:
+        __init__(self, filepath): Initialize the processor with a JSON file path.
+        _load_json(self, filepath): Load and parse JSON file from disk.
+        _build_flat_list(self, node): Build a flat list from nested JSON structure.
+        get_skeleton(self, data): Get a simplified skeleton of the data structure.
+        display_page(self): Display current page of the pool.
+        filter_data(self, is_fuzz=False): Filter data based on key/value.
+        export(self): Export filtered pool to a new file.
+        run(self): Main execution loop.
+    """
+    
     def __init__(self, filepath):
         self.filepath = filepath
         self.data = self._load_json(filepath)
@@ -40,15 +55,27 @@ class JSONProcessor:
             return [self.get_skeleton(data[0])] if data else []
         return data
 
-    def display_page(self):
+    def _get_page_info(self):
         total = len(self.pool)
         total_pages = (total + self.page_size - 1) // self.page_size
         start = self.current_page * self.page_size
         page_items = self.pool[start:start + self.page_size]
+        return total, total_pages, start, page_items
 
+    def display_page(self):
+        total, total_pages, start, page_items = self._get_page_info()
         print(f"\n--- POOL CONTENT: Page {self.current_page + 1}/{max(1, total_pages)} ({total} total) ---")
         print(json.dumps(page_items, indent=4, ensure_ascii=False))
         print("-" * 50)
+
+    def _sanitize_string(self, text):
+        return "".join(c for c in text if c.isalnum() or c in ('_', '-'))
+
+    def _match_value(self, item_val, val, is_fuzz):
+        if is_fuzz:
+            return fuzz.partial_ratio(item_val.lower(), val.lower()) >= 70
+        else:
+            return item_val.lower() == val.lower()
 
     def filter_data(self, is_fuzz=False):
         key = input("Enter key to filter: ").strip()
@@ -60,7 +87,7 @@ class JSONProcessor:
         for item in self.pool:
             if key in item:
                 item_val = str(item[key])
-                match = (fuzz.partial_ratio(item_val.lower(), val.lower()) >= 70) if is_fuzz else (item_val.lower() == val.lower())
+                match = self._match_value(item_val, val, is_fuzz)
                 
                 if match:
                     filtered.append(item)
@@ -81,8 +108,8 @@ class JSONProcessor:
             return False
         
         base = os.path.splitext(self.filepath)[0]
-        safe_key = "".join(c for c in self.last_key if c.isalnum() or c in ('_', '-'))
-        safe_val = "".join(c for c in self.last_value if c.isalnum() or c in ('_', '-'))
+        safe_key = self._sanitize_string(self.last_key)
+        safe_val = self._sanitize_string(self.last_value)
         out_path = f"{base}_extract_{safe_key}_{safe_val}.json"
         
         try:
@@ -103,13 +130,19 @@ class JSONProcessor:
             print("Options: [1] Fuzz Filter | [2] Strict Filter | [n] Next | [p] Prev | [y] Export | [q] Quit")
             choice = input("Choice: ").strip().lower()
 
-            if choice == 'q': break
-            elif choice == 'n': self.current_page = min(self.current_page + 1, (len(self.pool) - 1) // self.page_size)
-            elif choice == 'p': self.current_page = max(self.current_page - 1, 0)
-            elif choice == '1': self.filter_data(is_fuzz=True)
-            elif choice == '2': self.filter_data(is_fuzz=False)
+            if choice == 'q':
+                break
+            elif choice == 'n':
+                self.current_page = min(self.current_page + 1, (len(self.pool) - 1) // self.page_size)
+            elif choice == 'p':
+                self.current_page = max(self.current_page - 1, 0)
+            elif choice == '1':
+                self.filter_data(is_fuzz=True)
+            elif choice == '2':
+                self.filter_data(is_fuzz=False)
             elif choice == 'y':
-                if self.export(): break
+                if self.export():
+                    break
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

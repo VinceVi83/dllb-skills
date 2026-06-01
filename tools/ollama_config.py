@@ -65,18 +65,19 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 class OllamaConfig:
     """Ollama Configuration Manager
     
-    Role: Manages Ollama model configuration, system prompts, and request payloads.
+    Role: Manages Ollama model configuration, system prompts, profiles, and message payloads.
     
     Methods:
-        __init__(self, system_prompt=None, profile='default', soul=None, content='') : Initialize configuration with model settings.
-        set_think(self, active=True) : Enable/disable thinking mode with adjusted prediction limits.
-        set_profile(self, name) : Apply a predefined profile configuration.
-        set_system(self, prompt=None, profile=None, soul=None) : Set system prompt and profile.
-        apply_agent_from_scope(self, analysis_res) : Apply agent configuration from analysis scope.
+        __init__(self, system_prompt, profile, soul, content) : Initialize configuration with optional system prompt, profile, personality, and content.
+        set_think(self, active) : Enable/disable thinking mode with adjusted prediction limits.
+        set_profile(self, name) : Apply a predefined profile configuration to options.
+        set_system(self, prompt, profile, soul) : Set system prompt with optional profile and personality.
+        apply_agent_from_scope(self, analysis_res) : Apply agent configuration from scope mapping.
         _process_attachments(self, attachments) : Process and attach files to user content.
-        set_content(self, text, attachments=None) : Set user content with optional attachments.
-        get_payload(self) : Generate the final Ollama API request payload.
+        set_content(self, text, attachments) : Set user content text with optional attachments.
+        get_payload(self) : Generate the final Ollama API payload with messages and options.
     """
+    
     def __init__(self, system_prompt: str = None, profile: str = 'default', soul: str = None, content: str = ''):
         self.model = ''
         self.system_prompt = ''
@@ -143,7 +144,10 @@ class OllamaConfig:
         return self
     
     def get_payload(self):
-        system_content = f'{self.system_prompt} {self.personality}'.strip()
+        system_prompt_text = self.system_prompt
+        personality_text = self.personality
+        system_content = system_prompt_text + ' ' + personality_text
+        system_content = system_content.strip()
         return {
             'model': self.model,
             'messages': [

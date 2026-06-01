@@ -11,12 +11,14 @@ from PIL import Image, ImageDraw, ImageFont
 import logging
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class WeatherHour:
     timestamp: str
     condition: str
     temperature: float
     precipitation: float
+
 
 @dataclass
 class WeatherDay:
@@ -25,11 +27,13 @@ class WeatherDay:
     temperature: float
     precipitation_probability: Optional[int]
 
+
 @dataclass
 class WeatherStatus:
     status: str
     temperature: float
     last_update: str
+
 
 def format_for_llm(data: Any) -> str:
     if is_dataclass(data):
@@ -74,6 +78,7 @@ def format_for_llm(data: Any) -> str:
     
     return output
 
+
 def print_table(data: Any):
     if is_dataclass(data):
         items = [data]
@@ -114,7 +119,22 @@ def print_table(data: Any):
         
     print(border)
 
+
 class WeatherHaApi:
+    """Home Assistant Weather API Client
+    
+    Role: Fetches and formats weather data from Home Assistant and generates weather cards.
+    
+    Methods:
+        __init__(self) : Initialize the WeatherHaApi instance with Home Assistant credentials.
+        base_url_services(self) : Get the base URL for weather service endpoints.
+        _fetch_forecast(self, forecast_type) : Fetch forecast data from Home Assistant.
+        fetch_current_status(self) : Get current weather status from Home Assistant.
+        fetch_hourly_forecast(self, limit) : Get hourly weather forecast from Home Assistant.
+        fetch_daily_forecast(self, offset) : Get daily weather forecast from Home Assistant.
+        get_llm_payload(self, request, force_mode) : Generate LLM payload for weather reports.
+        generate_weather_card(self, weather_data, output_path, card_type) : Generate weather card image.
+    """
 
     def __init__(self):
         self.host = f"http://{cfg.home_assistant.ha_hostname}:8123/api"
@@ -213,18 +233,18 @@ class WeatherHaApi:
         conf.set_system(cfg.agents.weather_daily_report)
         if "weather_current" in [force_mode, mode]:
             result = self.fetch_current_status()
-            conf.user_content = format_for_llm(result)
             card_path = ha_weather.generate_weather_card(result, "weather_current.png", "current")
+            conf.user_content = format_for_llm(result)
             print(conf.user_content)
             res = llm.generate(conf).get('content', None)
-            return f'weather_current: {res} \nTempérature : {result.temperature}'
+            return f'weather_current: {res} \nTemperature: {result.temperature}'
         elif "weather_daily" in [force_mode, mode]:
             result = self.fetch_hourly_forecast(12)
             card_path = ha_weather.generate_weather_card(result, "weather_hourly.png", "hourly")
             conf.user_content = format_for_llm(result)
             print(conf.user_content)
             res = llm.generate(conf).get('content', None)
-            return f'weather_daily: {res} \nTempérature : {result[4].temperature}'
+            return f'weather_daily: {res} \nTemperature: {result[4].temperature}'
         elif "weather_tomorrow" in [force_mode, mode]:
             result = self.fetch_daily_forecast(1)
             card_path = ha_weather.generate_weather_card(result, "weather_daily.png", "daily")
@@ -232,134 +252,58 @@ class WeatherHaApi:
             print(conf.user_content)
             res = llm.generate(conf).get('content', None)
             print(f'weather_tomorrow\n')
-            return f'weather_tomorrow: {res} \nTempérature : {result.temperature}'
+            return f'weather_tomorrow: {res} \nTemperature: {result.temperature}'
         else:
             return 'Failed'
 
     def generate_weather_card(self, weather_data: Any, output_path: str = "weather_output.png", card_type: str = "hourly") -> str:
-        """Generate weather card from data (hourly, current, or daily)"""
         if os.path.exists(output_path):
             os.remove(output_path)
-        
-        # Setup
+
         ICONS_FOLDER = os.path.join(os.path.dirname(__file__), "weather_icons")
         CONDITION_MAPPING = {
-            "partlycloudy": {"text": "Nuageux", "file": "partlycloudy.png"},
-            "lightning-rainy": {"text": "Orageux", "file": "lightning-rainy.png"},
-            "sunny": {"text": "Ensoleillé", "file": "sunny.png"},
-            "rainy": {"text": "Pluvieux", "file": "rainy.png"},
-            "clear-night": {"text": "Nuit claire", "file": "partlycloudy.png"}
+            "partlycloudy": {"text": "Cloudy", "file": "partlycloudy.png"},
+            "lightning-rainy": {"text": "Stormy", "file": "lightning-rainy.png"},
+            "sunny": {"text": "Sunny", "file": "sunny.png"},
+            "rainy": {"text": "Rainy", "file": "rainy.png"},
+            "clear-night": {"text": "Clear night", "file": "partlycloudy.png"}
         }
-        
-        def paste_icon(img, condition, x, y, size):
-            icon_path = os.path.join(ICONS_FOLDER, CONDITION_MAPPING.get(condition, {"file": "partlycloudy.png"})["file"])
-            if os.path.exists(icon_path):
-                try:
-                    icon = Image.open(icon_path).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
-                    img.paste(icon, (x, y), icon)
-                    return
-                except:
-                    pass
-            # Fallback colored square
-            colors = {"sunny": (255, 215, 0), "rainy": (33, 150, 243), "clear-night": (240, 230, 140), "lightning-rainy": (100, 100, 200)}
-            color = colors.get(condition, (227, 227, 227))
-            Image.new("RGBA", (size, size), color + (255,)).convert(img.mode).paste(img, (x, y))
-        
-        def get_font(size):
-            for path in [f"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", f"DejaVuSans.ttf"]:
-                if os.path.exists(path):
-                    try:
-                        return ImageFont.truetype(path, size)
-                    except:
-                        pass
-            return ImageFont.load_default()
-        
-        # Generate based on type
-        img = Image.new("RGB", (550, 210 if card_type == "hourly" else 300 if card_type == "daily" else 350), (28, 28, 30))
-        draw = ImageDraw.Draw(img)
-        
-        if card_type == "hourly":
-            # Hourly forecast card
-            forecast_data = [{
-                "timestamp": h.timestamp.strftime("%H:%M") if isinstance(h.timestamp, datetime) else h.timestamp,
-                "condition": h.condition,
-                "temperature": h.temperature
-            } for h in weather_data]
-            
-            draw.text((20, 16), "Météo", font=get_font(14), fill=(142, 142, 147))
-            current = forecast_data[0]
-            draw.text((85, 48), CONDITION_MAPPING.get(current["condition"], {"text": "Nuageux"})["text"], font=get_font(26), fill=(227, 227, 227))
-            draw.text((85, 82), "Boulogne-Billancourt", font=get_font(14), fill=(142, 142, 147))
-            
-            # Current weather
-            paste_icon(img, current["condition"], 20, 48, 50)
-            temp_str = f"{round(current['temperature'])}°C"
-            draw.text((550 - 20 - draw.textlength(temp_str, get_font(30)), 48), temp_str, font=get_font(30), fill=(227, 227, 227))
-            
-            # Hourly forecast
-            col_width = (550 - 40) / len(forecast_data)
-            for i, f in enumerate(forecast_data):
-                x = 20 + i * col_width + col_width / 2
-                draw.text((x - draw.textlength(f["timestamp"], get_font(13))/2, 130), f["timestamp"], font=get_font(13), fill=(227, 227, 227))
-                paste_icon(img, f["condition"], int(x - 18), 150, 36)
-                draw.text((x - draw.textlength(f"{round(f['temperature'])}°", get_font(13))/2, 176), f"{round(f['temperature'])}°", font=get_font(13), fill=(227, 227, 227))
-        
-        elif card_type == "current":
-            # Current weather card
-            status = weather_data.status
-            draw.text((20, 20), "Météo Actuelle", font=get_font(18), fill=(227, 227, 227))
-            paste_icon(img, status, 550//2 - 75, 60, 150)
-            cond_text = CONDITION_MAPPING.get(status, {"text": "Inconnu"})["text"]
-            draw.text((550//2 - draw.textlength(cond_text, get_font(32))/2, 230), cond_text, font=get_font(32), fill=(227, 227, 227))
-            temp_str = f"{round(weather_data.temperature)}°C"
-            draw.text((550//2 - draw.textlength(temp_str, get_font(40))/2, 270), temp_str, font=get_font(40), fill=(227, 227, 227))
-            draw.text((20, 320), f"Dernière mise à jour: {weather_data.last_update}", font=get_font(14), fill=(142, 142, 147))
-        
-        else:  # daily
-            # Daily forecast card
-            forecast = weather_data
-            date_str = forecast.timestamp.strftime("%A %d %B %Y")
-            draw.text((20, 20), f"Prévision pour {date_str}", font=get_font(18), fill=(227, 227, 227))
-            paste_icon(img, forecast.condition, 550//2 - 60, 60, 120)
-            cond_text = CONDITION_MAPPING.get(forecast.condition, {"text": "Inconnu"})["text"]
-            draw.text((550//2 - draw.textlength(cond_text, get_font(28))/2, 190), cond_text, font=get_font(28), fill=(227, 227, 227))
-            temp_str = f"{round(forecast.temperature)}°C"
-            draw.text((550//2 - draw.textlength(temp_str, get_font(36))/2, 230), temp_str, font=get_font(36), fill=(227, 227, 227))
-            precip_str = f"Pluie: {forecast.precipitation_probability}%"
-            draw.text((550//2 - draw.textlength(precip_str, get_font(14))/2, 270), precip_str, font=get_font(14), fill=(142, 142, 147))
-        
-        img.save(output_path, "PNG")
-        return output_path
-        # Remove old output file if it exists
-        if os.path.exists(output_path):
-            os.remove(output_path)
-        
-        # Card dimensions and colors
+
+        if not os.path.exists(ICONS_FOLDER):
+            logger.warning(f"Missing folder: {ICONS_FOLDER}, using fallback icons")
+
         CARD_WIDTH = 550
-        CARD_HEIGHT = 210
+        CARD_HEIGHT = 210 if card_type == "hourly" else 300 if card_type == "daily" else 350
         BACKGROUND_COLOR = (28, 28, 30)
         TEXT_WHITE = (227, 227, 227)
         TEXT_GRAY = (142, 142, 147)
         
-        # Icon folder and condition mapping
-        ICONS_FOLDER = os.path.join(os.path.dirname(__file__), "weather_icons")
-        CONDITION_MAPPING = {
-            "partlycloudy": {"text": "Nuageux", "file": "partlycloudy.png"},
-            "lightning-rainy": {"text": "Orageux", "file": "lightning-rainy.png"},
-            "sunny": {"text": "Ensoleillé", "file": "sunny.png"},
-            "rainy": {"text": "Pluvieux", "file": "rainy.png"},
-            "clear-night": {"text": "Nuit claire", "file": "partlycloudy.png"}
-        }
-        
-        if not os.path.exists(ICONS_FOLDER):
-            logger.warning(f"Missing folder: {ICONS_FOLDER}, using fallback icons")
-        
-        # Create image
         img = Image.new("RGB", (CARD_WIDTH, CARD_HEIGHT), BACKGROUND_COLOR)
         draw = ImageDraw.Draw(img)
-        
+
+        def get_linux_font(font_name, size):
+            possible_paths = [
+                f"/usr/share/fonts/truetype/dejavu/{font_name}.ttf",
+                f"/usr/share/fonts/truetype/ubuntu/{font_name}.ttf",
+                f"/usr/share/fonts/truetype/liberation/{font_name}.ttf",
+                f"{font_name}.ttf"
+            ]
+            for path in possible_paths:
+                if os.path.exists(path):
+                    try:
+                        return ImageFont.truetype(path, size)
+                    except IOError:
+                        continue
+            return ImageFont.load_default()
+
+        font_title = get_linux_font("DejaVuSans", 18)
+        font_state = get_linux_font("DejaVuSans", 32)
+        font_location = get_linux_font("DejaVuSans", 16)
+        font_main_temp = get_linux_font("DejaVuSans", 40)
+        font_info = get_linux_font("DejaVuSans", 14)
+
         def paste_png_icon(base_img, condition, x, y, size_px):
-            cond_info = CONDITION_MAPPING.get(condition, {"text": "Météo", "file": "partlycloudy.png"})
+            cond_info = CONDITION_MAPPING.get(condition, {"text": "Weather", "file": "partlycloudy.png"})
             icon_path = os.path.join(ICONS_FOLDER, cond_info["file"])
             
             if not os.path.exists(icon_path):
@@ -385,55 +329,66 @@ class WeatherHaApi:
                 base_img.paste(icon, (int(x), int(y)), mask=icon.getchannel('A'))
             except Exception as e:
                 logger.error(f"Error processing icon {icon_path}: {e}")
+
+        if card_type == "hourly":
+            forecast_data = []
+            for h in weather_data:
+                forecast_data.append({
+                    "timestamp": h.timestamp.strftime("%H:%M") if isinstance(h.timestamp, datetime) else h.timestamp,
+                    "condition": h.condition,
+                    "temperature": h.temperature
+                })
+
+            draw.text((20, 16), "Weather", font=font_title, fill=TEXT_WHITE)
+            current = forecast_data[0]
+            draw.text((85, 48), CONDITION_MAPPING.get(current["condition"], {"text": "Cloudy"})["text"], font=font_state, fill=TEXT_WHITE)
+            draw.text((85, 82), "Boulogne-Billancourt", font=font_location, fill=TEXT_GRAY)
+
+            paste_png_icon(img, current["condition"], 20, 48, 50)
+            temp_str = f"{round(current['temperature'])}°C"
+            text_length = draw.textlength(temp_str, font=font_main_temp)
+            draw.text((CARD_WIDTH - 20 - text_length, 48), temp_str, font=font_main_temp, fill=TEXT_WHITE)
+
+            col_width = (CARD_WIDTH - 40) / len(forecast_data)
+            for i, f in enumerate(forecast_data):
+                x = 20 + i * col_width + col_width / 2
+                timestamp_text = f["timestamp"]
+                timestamp_length = draw.textlength(timestamp_text, font=font_location)
+                draw.text((x - timestamp_length / 2, 130), timestamp_text, font=font_location, fill=TEXT_WHITE)
+                paste_png_icon(img, f["condition"], int(x - 18), 150, 36)
+                temp_display = f"{round(f['temperature'])}°"
+                temp_display_length = draw.textlength(temp_display, font=font_location)
+                draw.text((x - temp_display_length / 2, 176), temp_display, font=font_location, fill=TEXT_WHITE)
         
-        def get_linux_font(font_name, size):
-            possible_paths = [
-                f"/usr/share/fonts/truetype/dejavu/{font_name}.ttf",
-                f"/usr/share/fonts/truetype/ubuntu/{font_name}.ttf",
-                f"/usr/share/fonts/truetype/liberation/{font_name}.ttf",
-                f"{font_name}.ttf"
-            ]
-            for path in possible_paths:
-                if os.path.exists(path):
-                    try:
-                        return ImageFont.truetype(path, size)
-                    except IOError:
-                        continue
-            return ImageFont.load_default()
+        elif card_type == "current":
+            status = weather_data.status
+            draw.text((20, 20), "Current Weather", font=font_title, fill=TEXT_WHITE)
+            paste_png_icon(img, status, CARD_WIDTH // 2 - 75, 60, 150)
+            cond_text = CONDITION_MAPPING.get(status, {"text": "Unknown"})["text"]
+            cond_text_length = draw.textlength(cond_text, font=font_state)
+            draw.text((CARD_WIDTH // 2 - cond_text_length // 2, 230), cond_text, font=font_state, fill=TEXT_WHITE)
+            temp_str = f"{round(weather_data.temperature)}°C"
+            temp_str_length = draw.textlength(temp_str, font=font_main_temp)
+            draw.text((CARD_WIDTH // 2 - temp_str_length // 2, 270), temp_str, font=font_main_temp, fill=TEXT_WHITE)
+            draw.text((20, 320), f"Last update: {weather_data.last_update}", font=font_info, fill=TEXT_GRAY)
         
-        # Load fonts
-        font_title = get_linux_font("DejaVuSans", 18)
-        font_state = get_linux_font("DejaVuSans", 32)
-        font_location = get_linux_font("DejaVuSans", 16)
-        font_main_temp = get_linux_font("DejaVuSans", 40)
-        font_info = get_linux_font("DejaVuSans", 14)
+        else:
+            forecast = weather_data
+            date_str = forecast.timestamp.strftime("%A %d %B %Y")
+            draw.text((20, 20), f"Forecast for {date_str}", font=font_title, fill=TEXT_WHITE)
+            paste_png_icon(img, forecast.condition, CARD_WIDTH // 2 - 60, 60, 120)
+            cond_text = CONDITION_MAPPING.get(forecast.condition, {"text": "Unknown"})["text"]
+            cond_text_length = draw.textlength(cond_text, font=font_state)
+            draw.text((CARD_WIDTH // 2 - cond_text_length // 2, 190), cond_text, font=font_state, fill=TEXT_WHITE)
+            temp_str = f"{round(forecast.temperature)}°C"
+            temp_str_length = draw.textlength(temp_str, font=font_main_temp)
+            draw.text((CARD_WIDTH // 2 - temp_str_length // 2, 230), temp_str, font=font_main_temp, fill=TEXT_WHITE)
+            precip_str = f"Rain: {forecast.precipitation_probability}%"
+            precip_str_length = draw.textlength(precip_str, font=font_info)
+            draw.text((CARD_WIDTH // 2 - precip_str_length // 2, 270), precip_str, font=font_info, fill=TEXT_GRAY)
         
-        # Draw title
-        draw.text((20, 20), "Météo Actuelle", font=font_title, fill=TEXT_WHITE)
-        
-        # Current weather
-        mapped_current = CONDITION_MAPPING.get(current_status.condition, {"text": "Inconnu"})
-        
-        current_temp_str = f"{round(current_status.temperature)}°C"
-        
-        # Current weather icon
-        paste_png_icon(img, current_status.condition, CARD_WIDTH//2 - 75, 60, size_px=150)
-        
-        # Current weather text
-        condition_text = mapped_current["text"]
-        c_w = draw.textlength(condition_text, font=font_state)
-        draw.text((CARD_WIDTH//2 - c_w//2, 230), condition_text, font=font_state, fill=TEXT_WHITE)
-        
-        # Temperature display
-        temp_width = draw.textlength(current_temp_str, font=font_main_temp)
-        draw.text((CARD_WIDTH//2 - temp_width//2, 270), current_temp_str, font=font_main_temp, fill=TEXT_WHITE)
-        
-        # Additional info
-        draw.text((20, 320), f"Dernière mise à jour: {current_status.last_update}", font=font_info, fill=TEXT_GRAY)
-        
-        # Save the image
         img.save(output_path, "PNG")
-        logger.info(f"Current weather card generated: {output_path}")
+        logger.info(f"Weather card generated: {output_path}")
         
         return output_path
 

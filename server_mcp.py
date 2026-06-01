@@ -3,14 +3,15 @@ from weather.meteo import WeatherHaApi
 from ratp.departure_alert_ratp import Trip, Line
 from config_loader import cfg
 
-mcp = FastMCP("Mon Super Serveur")
-outbound = [Line(**line.to_dict()) for line in cfg.ratp.outbound]
-returns = [Line(**line.to_dict()) for line in cfg.ratp.returns]
-my_trip = Trip(outbound, returns)
+mcp = FastMCP("My Super Server")
 
-outbound_test = [Line(**line.to_dict()) for line in cfg.ratp_test.outbound]
-returns_test = [Line(**line.to_dict()) for line in cfg.ratp_test.returns]
-my_trip_test = Trip(outbound_test, returns_test)
+def create_trip(config_section):
+    outbound = [Line(**line.to_dict()) for line in config_section.outbound]
+    returns = [Line(**line.to_dict()) for line in config_section.returns]
+    return Trip(outbound, returns)
+
+my_trip = create_lines(cfg.ratp)
+my_trip_test = create_lines(cfg.ratp_test)
 
 @mcp.tool()
 def tracking(content: str) -> str:
@@ -19,9 +20,8 @@ def tracking(content: str) -> str:
     return content
 
 @mcp.tool()
-def soustraction(a: int, b: int) -> int:
+def subtraction(a: int, b: int) -> int:
     """Calcule la différence (a - b)."""
-    print("add a - b")
     return a - b
 
 @mcp.resource("config://app")
@@ -30,7 +30,7 @@ def get_config() -> str:
     return "Test | Version: 2.0.0"
 
 @mcp.tool()
-def querry_weather(info) -> str:
+def query_weather(info) -> str:
     """Querry information about weather"""
     ha_weather = WeatherHaApi()
     return ha_weather.get_llm_payload('Quelle est la météo')
