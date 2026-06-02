@@ -1,0 +1,37 @@
+ollama:
+  local_url: "http://localhost:11434"
+  wan_url: "http://192.168.0.16:11434"
+  default_model_lan: "ministral-3:3b"
+  fallback_model_lan: "qwen2.5:3b"
+  default_model_wan: "qwen3.5:9B"
+  fallback_model_wan: "qwen2.5:14b"
+  timeout: 90
+  options:
+    temperature: 0.7
+    num_ctx: 4096
+    top_p: 0.9
+
+home_assistant:
+  ha_token: ha_token
+  ha_hostname: 192.168.0.23
+  ha_weather_location: weather.boulogne_billancourt
+
+ratp:
+  token: token
+  outbound:
+    - name: "10"
+      direction: 'Pont de Saint-Cloud'
+      stop: "21970"
+      id_name: "C01380"
+      walk: 5
+    - name: "13"
+      direction: 'Saint-Denis-Université'
+      stop: "22229"
+      id_name: "C01383"
+      walk: 5
+  returns:
+    - name: "9"
+      direction: 'Montreuil'
+      stop: "462914"
+      id_name: "C01379"
+      walk: 5
