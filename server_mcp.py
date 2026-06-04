@@ -30,10 +30,10 @@ def get_config() -> str:
     return "Test | Version: 2.0.0"
 
 @mcp.tool()
-def query_weather(info) -> str:
+def query_weather(info: str) -> str:
     """Query information about weather"""
     ha_weather = WeatherHaApi()
-    return ha_weather.get_llm_payload('Quelle est la météo')
+    return ha_weather.get_llm_payload(info)
 
 @mcp.tool()
 def go_to_work_test() -> str:

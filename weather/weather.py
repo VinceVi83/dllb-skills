@@ -239,7 +239,7 @@ class WeatherHaApi:
             res = llm.generate(conf).get('content', None)
             return f'weather_current: {res} \nTemperature: {result.temperature}'
         elif "weather_daily" in [force_mode, mode]:
-            result = self.fetch_hourly_forecast(12)
+            result = self.fetch_hourly_forecast(10)
             self.generate_weather_card(result, "weather_hourly.png", "hourly")
             conf.user_content = format_for_llm(result)
             print(conf.user_content)
@@ -263,11 +263,11 @@ class WeatherHaApi:
         ICONS_FOLDER = os.path.join(os.path.dirname(__file__), "weather_icons")
         CONDITION_MAPPING = {
             "partlycloudy": {"text": "Cloudy", "file": "partlycloudy.png"},
-            "lightning-rainy": {"text": "Stormy", "file": "lightning-rainy.png"},
-            "lightning": {"text": "Stormy", "file": "lightning-rainy.png"},
+            "lightning-rainy": {"text": "Stormy", "file": "lightning.png"},
+            "lightning": {"text": "Stormy", "file": "lightning.png"},
             "sunny": {"text": "Sunny", "file": "sunny.png"},
             "rainy": {"text": "Rainy", "file": "rainy.png"},
-            "clear-night": {"text": "Clear night", "file": "partlycloudy.png"}
+            "clear-night": {"text": "Clear night", "file": "clear-night.png"}
         }
 
         if not os.path.exists(ICONS_FOLDER):
@@ -356,7 +356,7 @@ class WeatherHaApi:
                 timestamp_text = f["timestamp"]
                 timestamp_length = draw.textlength(timestamp_text, font=font_location)
                 draw.text((x - timestamp_length / 2, 130), timestamp_text, font=font_location, fill=TEXT_WHITE)
-                paste_png_icon(img, f["condition"], int(x - 18), 150, 36)
+                paste_png_icon(img, f["condition"], int(x - 18), 145, 36)
                 temp_display = f"{round(f['temperature'])}°"
                 temp_display_length = draw.textlength(temp_display, font=font_location)
                 draw.text((x - temp_display_length / 2, 176), temp_display, font=font_location, fill=TEXT_WHITE)
@@ -398,32 +398,30 @@ if __name__ == "__main__":
     try:
         ha_weather = WeatherHaApi()
         
-        # Test unified weather card generation
-        print("Testing hourly weather card...")
-        hourly_data = ha_weather.fetch_hourly_forecast(8)
-        if hourly_data:
-            card_path = ha_weather.generate_weather_card(hourly_data, "weather_hourly.png", "hourly")
-            print(f"Hourly weather card generated at: {card_path}")
+        # print("Testing hourly weather card...")
+        # hourly_data = ha_weather.fetch_hourly_forecast(8)
+        # if hourly_data:
+        #     card_path = ha_weather.generate_weather_card(hourly_data, "weather_hourly.png", "hourly")
+        #     print(f"Hourly weather card generated at: {card_path}")
         
-        print("Testing current weather card...")
-        current_data = ha_weather.fetch_current_status()
-        if current_data:
-            card_path = ha_weather.generate_weather_card(current_data, "weather_current.png", "current")
-            print(f"Current weather card generated at: {card_path}")
+        # print("Testing current weather card...")
+        # current_data = ha_weather.fetch_current_status()
+        # if current_data:
+        #     card_path = ha_weather.generate_weather_card(current_data, "weather_current.png", "current")
+        #     print(f"Current weather card generated at: {card_path}")
         
-        print("Testing daily weather card...")
-        daily_data = ha_weather.fetch_daily_forecast(1)
-        if daily_data:
-            card_path = ha_weather.generate_weather_card(daily_data, "weather_daily.png", "daily")
-            print(f"Daily weather card generated at: {card_path}")
+        # print("Testing daily weather card...")
+        # daily_data = ha_weather.fetch_daily_forecast(1)
+        # if daily_data:
+        #     card_path = ha_weather.generate_weather_card(daily_data, "weather_daily.png", "daily")
+        #     print(f"Daily weather card generated at: {card_path}")
         
-        # Original functionality
-        # ha_weather.get_llm_payload('Quelle est la météo')
-        # ha_weather.get_llm_payload("il fera quel temp aujourd'hui")
-        # ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
-        # ha_weather.get_llm_payload('', force_mode='weather_current')
-        # ha_weather.get_llm_payload('', force_mode='weather_daily')
-        # ha_weather.get_llm_payload('', force_mode='weather_tomorrow')
+        ha_weather.get_llm_payload('Quelle est la météo')
+        ha_weather.get_llm_payload("il fera quel temp aujourd'hui")
+        ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
+        ha_weather.get_llm_payload('', force_mode='weather_current')
+        ha_weather.get_llm_payload('', force_mode='weather_daily')
+        ha_weather.get_llm_payload('', force_mode='weather_tomorrow')
         
     except Exception as e:
         logger.error(f"Fatal error: {e}")
