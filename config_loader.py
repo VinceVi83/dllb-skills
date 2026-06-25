@@ -1,44 +1,28 @@
 import sys
-import logging
 import yaml
 import shutil
 import threading
 import requests
+import time
+from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+import logging
 logger = logging.getLogger(__name__)
-
 
 class Utils:
     """Utility Functions for File Operations and Data Formatting
     
-    Role: Provides helper methods for file path management, data formatting, and type conversion.
+    Role: Provides helper methods for data formatting, sending messages to discord (dllb),
+          and registering automated tasks in the Orchestrator API.
     
     Methods:
-        get_unique_path(dir_path, base_name, extension='.wav') : Generate unique file path with counter.
         format_result(result) : Format dict or other result as string.
-        to_int(data, key) : Convert value to integer or return -1 on error.
-        to_str(data, key) : Convert value to string or return 'ERROR' on empty/None.
-        enable_bypass() : Return bypass configuration flag.
+        send_discord_notification(...) : Sends asynchronous notifications.
+        add_cron_task(...) : Adds a recurring cron task via the Scheduler API.
+        add_oneshot_task(...) : Adds a one-time task (ISO date or timestamp) via the Scheduler API.
     """
-    
-    @staticmethod
-    def get_unique_path(dir_path, base_name, extension=".wav"):
-        directory = Path(dir_path)
-        directory.mkdir(parents=True, exist_ok=True)
-
-        filename = f"{base_name}{extension}"
-        dest_path = directory / filename
-
-        counter = 1
-        while dest_path.exists():
-            filename = f"{base_name}_{counter}{extension}"
-            dest_path = directory / filename
-            counter += 1
-
-        return dest_path, filename
-
     @staticmethod
     def format_result(result):
         if isinstance(result, dict):
@@ -52,51 +36,97 @@ class Utils:
         return str(result)
 
     @staticmethod
-    def to_int(data, key):
-        try:
-            val = data.get(key)
-            if val is not None:
-                return int(val)
-            return -1
-        except (ValueError, TypeError):
-            return -1
-    
-    @staticmethod
-    def to_str(data, key):
-        val = data.get(key)
-        if val is None:
-            return "ERROR"
-        val_str = str(val)
-        if val_str.strip() == "":
-            return "ERROR"
-        return val_str
-
-    @staticmethod
     def send_discord_notification(message, channel=None, files=None):
-        if getattr(cfg.sys, 'discord', None) is None:
+        if getattr(cfg, 'discord', None) is None:
             logger.info("Discord not configured")
             return
-
         def post_request():
             try:
                 if channel is not None:
                     channel_name = channel
                 else:
-                    channel_name = cfg.sys.discord.CHANNEL
-       
+                    channel_name = cfg.discord.channel
                 payload = {
                     "channel_name": channel_name,
                     "msg": message,
                     "attachments": files if files else []
                 }
-                requests.post(f"http://{cfg.sys.discord.HOST}:{cfg.sys.discord.PORT}/send",
+                requests.post(f"http://{cfg.discord.host}:{cfg.discord.port}/send",
                               json=payload,
                               timeout=5)
             except Exception as e:
                 pass
-
         threading.Thread(target=post_request, daemon=True).start()
 
+    @staticmethod
+    def add_cron_task(task_id: str, function: str, cron_expr: dict, description: str = "", args: list = None, hidden: str = "yes"):
+        """
+        Enregistre une tâche récurrente de type cron alignée sur le modèle valide.
+        :param cron_expr: Dictionnaire contenant minute, hour, day, month, day_of_week
+        """
+        try:
+            port = getattr(cfg.agenda_task, 'port', 8888)
+            url = f"http://localhost:{port}/tasks"
+            
+            payload = {
+                "id": task_id,
+                "function": function,
+                "trigger_type": "cron",
+                "description": description,
+                "cron": {
+                    "minute": cron_expr.get("minute", "0"),
+                    "hour": cron_expr.get("hour", "0"),
+                    "day": cron_expr.get("day", "*"),
+                    "month": cron_expr.get("month", "*"),
+                    "day_of_week": cron_expr.get("day_of_week", "*")
+                },
+                "run_date": None,
+                "args": args if args else [],
+                "status": "active",
+                "state": "active",
+                "skip_next": [],
+                "hidden": hidden
+            }
+            response = requests.post(url, json=payload, timeout=5)
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to add cron task {task_id}: {str(e)}")
+            return {"success": False, "message": str(e)}
+
+    @staticmethod
+    def add_oneshot_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
+        """
+        Enregistre une tâche à exécution unique (date) alignée sur le modèle valide.
+        :param date_or_timestamp: Chaîne au format ISO ou timestamp Unix (int/float)
+        """
+        try:
+            if isinstance(date_or_timestamp, (int, float)):
+                run_date_str = datetime.fromtimestamp(date_or_timestamp).isoformat()
+            else:
+                run_date_str = str(date_or_timestamp)
+
+            port = getattr(cfg.agenda_task, 'port', 8888)
+            url = f"http://localhost:{port}/tasks"
+
+            payload = {
+                "id": task_id,
+                "function": function,
+                "trigger_type": "date",
+                "description": description,
+                "cron": None,
+                "run_date": run_date_str,
+                "args": args if args else [],
+                "status": "active",
+                "state": "active",
+                "skip_next": [],
+                "hidden": hidden
+            }
+
+            response = requests.post(url, json=payload, timeout=5)
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to add oneshot task {task_id}: {str(e)}")
+            return {"success": False, "message": str(e)}
 
 class LocalFilesFilter(logging.Filter):
     

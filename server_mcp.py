@@ -1,79 +1,84 @@
+import os
+import sys
+import importlib
+import inspect
+from datetime import datetime
 from fastmcp import FastMCP
-from weather.weather import WeatherHaApi
-from ratp.departure_alert_ratp import Trip, Line
 from config_loader import cfg
 
+# Initialize MCP Server first
 mcp = FastMCP("My Super Server")
 
-def create_trip(config_section):
-    outbound = [Line(**line.to_dict()) for line in config_section.outbound]
-    returns = [Line(**line.to_dict()) for line in config_section.returns]
-    return Trip(outbound, returns)
+# Ensure root path is available for dynamic resolution
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
-my_trip = create_trip(cfg.ratp)
-my_trip_test = create_trip(cfg.ratp_test)
+EXCLUDE_DIRS = {"__pycache__", "agents", "data", "index_db"}
+EXCLUDE_FILES = {"server_mcp.py", "config_loader.py", "mcp_cli.py"}
 
-@mcp.tool()
-def tracking(content: str) -> str:
-    """Additionne deux nombres entiers (a + b)."""
-    print("add a + b")
-    return content
+def auto_register_tools(mcp_instance, root_dir):
+    for root, dirs, files in os.walk(root_dir):
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
+        
+        for file in files:
+            if file.endswith(".py") and file not in EXCLUDE_FILES:
+                rel_path = os.path.relpath(os.path.join(root, file), root_dir)
+                mod_name = rel_path.replace(os.sep, ".").removesuffix(".py")
+                
+                print(f"[Scan] Checking file: {rel_path} (module: {mod_name})")
+                try:
+                    module = importlib.import_module(mod_name)
+                    for name, obj in inspect.getmembers(module):
+                        # 1. Scan global standalone functions
+                        if inspect.isfunction(obj) and not name.startswith("_"):
+                            if obj.__module__ == module.__name__ and obj.__doc__:
+                                print(f"  -> Found function tool: {name}")
+                                mcp_instance.tool()(obj)
+                        
+                        # 2. Scan classes for methods (like WeatherHaApi)
+                        elif inspect.isclass(obj) and obj.__module__ == module.__name__:
+                            for method_name, method_obj in inspect.getmembers(obj, predicate=inspect.isfunction):
+                                if not method_name.startswith("_") and method_obj.__doc__:
+                                    # Create a wrapper or register method if it can run standalone/instantiated
+                                    print(f"  -> Found class method tool candidate: {obj.__name__}.{method_name}")
+                                    # For methods requiring self, you might need dedicated initialization logic.
+                except Exception as e:
+                    print(f"  [Error] Failed to import {mod_name}: {e}")
 
-@mcp.tool()
-def subtraction(a: int, b: int) -> int:
-    """Calcule la différence (a - b)."""
-    return a - b
+# Auto-discover and map tools
+auto_register_tools(mcp, project_root)
 
 @mcp.resource("config://app")
 def get_config() -> str:
-    print("get_config")
     return "Test | Version: 2.0.0"
 
-@mcp.tool()
-def query_weather(info: str) -> str:
-    """Query information about weather"""
-    ha_weather = WeatherHaApi()
-    return ha_weather.get_llm_payload(info)
-
-@mcp.tool()
-def go_to_work_test() -> str:
-    """
-    APPELER CET OUTIL UNIQUEMENT SI l'utilisateur veut connaître les horaires de bus 
-    ou recevoir une notification pour aller au TRAVAIL. 
-    Ne pas utiliser pour autre chose.
-    """
-    print('go_to_work')
-    return my_trip_test.display_all(reverse=False)
-
-@mcp.tool()
-def go_home_test() -> str:
-    """
-    APPELER CET OUTIL UNIQUEMENT SI l'utilisateur veut connaître les horaires de bus 
-    ou recevoir une notification pour aller à la MAISON. 
-    Ne pas utiliser pour autre chose.
-    """
-    print('go_home')
-    return my_trip_test.display_all(reverse=True)
-
-@mcp.tool()
-def go_to_work() -> str:
-    """
-    APPELER CET OUTIL UNIQUEMENT SI l'utilisateur veut connaître les horaires de bus 
-    ou recevoir une notification pour aller au TRAVAIL. 
-    Ne pas utiliser pour autre chose.
-    """
-    print('go_to_work')
-    return my_trip.display_all(reverse=False)
-
-@mcp.tool()
-def go_home() -> str:
-    """
-    APPELER CET OUTIL UNIQUEMENT SI l'utilisateur veut connaître les horaires de bus 
-    ou recevoir une notification pour aller à la MAISON. 
-    Ne pas utiliser pour autre chose.
-    """
-    print('go_home')
-    return my_trip.display_all(reverse=True)
 
 if __name__ == "__main__":
-    mcp.run()
+    print("\n=== REGISTERED MCP TOOLS ===")
+    
+    registered = []
+    if hasattr(mcp, "list_tools") and callable(mcp.list_tools):
+        try:
+            import asyncio
+            import inspect
+            if inspect.iscoroutinefunction(mcp.list_tools):
+                tools_list = asyncio.run(mcp.list_tools())
+            else:
+                tools_list = mcp.list_tools()
+            registered = [t.name for t in tools_list]
+        except Exception:
+            pass
+            
+    if not registered:
+        if hasattr(mcp, "_registry") and hasattr(mcp._registry, "tools"):
+            registered = [t.name for t in mcp._registry.tools]
+        elif hasattr(mcp, "_tools"):
+            registered = list(mcp._tools.keys())
+        
+    if registered:
+        for tool_name in registered:
+            print(f"  - {tool_name}")
+    else:
+        print("  No tools found in the standard registry locations.")
+    print("============================\n")
