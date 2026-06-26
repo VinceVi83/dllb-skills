@@ -4,9 +4,11 @@ import shutil
 import threading
 import requests
 import time
+import socket
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from pathlib import Path
 
 import logging
 logger = logging.getLogger(__name__)
@@ -36,6 +38,18 @@ class Utils:
         return str(result)
 
     @staticmethod
+    def get_server_ip():
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            ip = "127.0.0.1"
+        finally:
+            s.close()
+        return ip
+
+    @staticmethod
     def send_discord_notification(message, channel=None, files=None):
         if getattr(cfg, 'discord', None) is None:
             logger.info("Discord not configured")
@@ -56,41 +70,46 @@ class Utils:
                               timeout=5)
             except Exception as e:
                 pass
-        threading.Thread(target=post_request, daemon=True).start()
+        threading.Thread(target=post_request, daemon=False).start()
 
     @staticmethod
-    def add_cron_task(task_id: str, function: str, cron_expr: dict, description: str = "", args: list = None, hidden: str = "yes"):
-        """
-        Enregistre une tâche récurrente de type cron alignée sur le modèle valide.
-        :param cron_expr: Dictionnaire contenant minute, hour, day, month, day_of_week
-        """
+    def add_oneshot_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
         try:
-            port = getattr(cfg.agenda_task, 'port', 8888)
-            url = f"http://localhost:{port}/tasks"
-            
+            if isinstance(date_or_timestamp, (int, float)):
+                run_date_str = datetime.fromtimestamp(date_or_timestamp).strftime('%Y-%m-%dT%H:%M:%S')
+            else:
+                try:
+                    if 'T' in str(date_or_timestamp):
+                        date_part, time_part = str(date_or_timestamp).split('T')
+                        time_segments = time_part.split(':')
+                        padded_time = ':'.join(seg.zfill(2) for seg in time_segments)
+                        dt = datetime.fromisoformat(f"{date_part}T{padded_time}")
+                    else:
+                        dt = datetime.fromisoformat(str(date_or_timestamp))
+                    run_date_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
+                except ValueError:
+                    run_date_str = str(date_or_timestamp)
+
+            url = f"http://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
+
             payload = {
                 "id": task_id,
                 "function": function,
-                "trigger_type": "cron",
+                "trigger_type": "date",
                 "description": description,
-                "cron": {
-                    "minute": cron_expr.get("minute", "0"),
-                    "hour": cron_expr.get("hour", "0"),
-                    "day": cron_expr.get("day", "*"),
-                    "month": cron_expr.get("month", "*"),
-                    "day_of_week": cron_expr.get("day_of_week", "*")
-                },
-                "run_date": None,
+                "cron": None,
+                "run_date": run_date_str,
                 "args": args if args else [],
                 "status": "active",
                 "state": "active",
                 "skip_next": [],
                 "hidden": hidden
             }
+
             response = requests.post(url, json=payload, timeout=5)
             return response.json()
         except Exception as e:
-            logger.error(f"Failed to add cron task {task_id}: {str(e)}")
+            logger.error(f"Failed to add oneshot task {task_id}: {str(e)}")
             return {"success": False, "message": str(e)}
 
     @staticmethod
@@ -105,8 +124,7 @@ class Utils:
             else:
                 run_date_str = str(date_or_timestamp)
 
-            port = getattr(cfg.agenda_task, 'port', 8888)
-            url = f"http://localhost:{port}/tasks"
+            url = f"http://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
 
             payload = {
                 "id": task_id,
@@ -190,7 +208,6 @@ class CfgConfig(SimpleNamespace):
 
     def _format_object(self, obj, indent_level=0):
         spacing = "  " * indent_level
-        
         if isinstance(obj, (SimpleNamespace, CfgConfig)):
             items = vars(obj).items()
             if not items:
@@ -219,10 +236,9 @@ class CfgConfig(SimpleNamespace):
         return result
 
 
-class DiscordSkillConfig:
-    
+class Cfg:
     def __init__(self):
-        self.BASE_DIR = Path.home() / "Documents" / "discord-skill"
+        self.BASE_DIR = Path.home() / "Documents" / Path(__file__).parent.name
         self.CONFIG_FILE = self.BASE_DIR / "config.yaml"
         self.AGENTS_DIR = self.BASE_DIR / "agents"
         self.AGENTS_DIR_COMMON = Path(__file__).parent / "agents"
@@ -275,4 +291,4 @@ class DiscordSkillConfig:
         return data
 
 
-cfg = DiscordSkillConfig().cfg
+cfg = Cfg().cfg

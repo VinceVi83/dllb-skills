@@ -14,24 +14,47 @@ ollama:
 home_assistant:
   ha_token: ha_token
   ha_hostname: 192.168.0.23
-  ha_weather_location: weather.boulogne_billancourt
+  ha_weather_location: weather.paris
 
 ratp:
   token: token
-  outbound:
-    - name: "10"
-      direction: 'Pont de Saint-Cloud'
-      stop: "21970"
-      id_name: "C01380"
-      walk: 5
-    - name: "13"
-      direction: 'Saint-Denis-Université'
-      stop: "22229"
-      id_name: "C01383"
-      walk: 5
-  returns:
-    - name: "9"
-      direction: 'Montreuil'
-      stop: "462914"
-      id_name: "C01379"
-      walk: 5
+  daily_commute:
+    dest_desc: "Get upcoming public transport departure times for the morning commute (Going to work/destination). Returns real-time schedules for Line 10 and Line 13."
+    dest:
+      - name: "10"
+        direction: 'Pont de Saint-Cloud'
+        stop: "21970"
+        id_name: "C01380"
+        walk: 5
+      - name: "13"
+        direction: 'Saint-Denis-Université'
+        stop: "22229"
+        id_name: "C01383"
+        walk: 5
+    ret_desc: "Get upcoming public transport departure times for the evening commute (Returning home). Returns real-time schedules for Line 9."
+    ret:
+      - name: "9"
+        direction: 'Montreuil'
+        stop: "462914"
+        id_name: "C01379"
+        walk: 5
+  daily_commute2:
+    dest_desc: DOCSTRING
+    dest:
+      - name: "10"
+        direction: 'Pont de Saint-Cloud'
+        stop: "21970"
+        id_name: "C01380"
+        walk: 5
+      - name: "13"
+        direction: 'Saint-Denis-Université'
+        stop: "22229"
+        id_name: "C01383"
+        walk: 5
+    ret_desc: DOCSTRING
+    ret:
+      - name: "9"
+        direction: 'Montreuil'
+        stop: "462914"
+        id_name: "C01379"
+        walk: 5
