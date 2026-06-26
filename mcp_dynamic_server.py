@@ -73,7 +73,6 @@ def create_server() -> FastMCP:
 
 mcp = create_server()
 
-
 def available_functions():
     print("\n=== REGISTERED MCP TOOLS ===")
     tools_list = asyncio.run(mcp.list_tools())
@@ -108,8 +107,11 @@ def test(function_name):
     print("====================================\n")
 
 if __name__ == "__main__":
-    available_functions()
-    test("notify_new_anime")
-    test("get_today_12h_forecast")
-    test("work_commute_dest")
-    test("work_commute_ret")
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        available_functions()
+        # test("notify_new_anime")
+        # test("get_today_12h_forecast")
+        # test("work_commute_dest")
+        # test("work_commute_ret")
+    else:
+        mcp.run()
