@@ -9,10 +9,16 @@ from config_loader import Utils
 from datetime import datetime, time as dt_time
 
 class AnimeCard:
+    """Anime Card Representation
+
+    Role: Extracts and stores information about an anime from a web page.
+
+    Methods:
+        __init__(self, poster_div) : Initialize with the HTML div containing the anime card.
+    """
     def __init__(self, poster_div):
         self.poster_div = poster_div
         self.article_parent = poster_div.find_parent("article", class_="anime")
-        
         self.status = "none"
         if self.article_parent and self.article_parent.has_attr("data-library-status"):
             status_value = self.article_parent["data-library-status"].strip()
@@ -24,13 +30,11 @@ class AnimeCard:
             title_tag = self.article_parent.find("h3", class_="main-title")
             if title_tag and title_tag.a:
                 self.name = title_tag.a.text.strip()
-        
+
         schedule_info_tag = poster_div.find("div", class_="release-schedule-info")
         self.episode_info = schedule_info_tag.text.strip() if schedule_info_tag else "EP ?"
-        
         img_tag = poster_div.find("img", {"data-anime-card-target": "poster"})
         self.poster_url = img_tag["src"] if img_tag else None
-
         time_tag = poster_div.find("time", {"data-anime-card-target": "countdown"})
         if time_tag:
             self.countdown = time_tag.text.strip()
@@ -53,24 +57,18 @@ class AnimeCard:
 def _livechart_scrap(test_mode=False):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(current_dir, "../.."))
-    
     scraper_path = os.path.join(project_root, "skills", "scrap-url", "scrap_url.py")
     session_file = os.path.join(current_dir, "livechart.json")
-    
     cmd = [
         sys.executable, scraper_path,
         "--url", "https://www.livechart.me/",
         "-s", session_file,
         "-o", current_dir
     ]
-    
     if test_mode:
         cmd.append("-t")
-        
     print(f"Executing: {' '.join(cmd)}")
-    
     result = subprocess.run(cmd, capture_output=False, text=True)
-    
     if result.returncode != 0:
         print(f"Error executing scraper. Return code: {result.returncode}")
 
@@ -105,7 +103,6 @@ def _extract_and_filter_animes(file_name, hide_releases=False, sort_by_countdown
 
     filtered_divs_list = [item[1] for item in extracted_animes]
     animes_dict = {item[0].name: item[0] for item in extracted_animes}
-            
     return filtered_divs_list, animes_dict
 
 
@@ -115,11 +112,10 @@ def _notif(anime_name):
         return
 
     mapping_sites = {
-        "Mushoku Tensei Ⅲ: Isekai Ittara Honki Dasu": "Crunchyroll",
-        "One Piece": "ADN",
+        "Mushoku Tensei Ⅲ: Isekai Ittara Honki Dasu": "Crunchyroll"
     }
     streaming_site = mapping_sites.get(anime_name, "[Streaming site]")
-    
+
     discord_alert = (
         f"📢 **New Episode Available!**\n"
         f"🎬 The anime **{anime.name}** ({anime.episode_info}) is available on **{streaming_site}** !\n"
@@ -151,7 +147,6 @@ def notify_new_anime():
     _livechart_scrap()
     today_start = datetime.combine(datetime.now(), dt_time.min).timestamp()
     today_end = datetime.combine(datetime.now(), dt_time.max).timestamp()
-
     for anime in DICO_ANIMES.values():
         if anime.timestamp:
             try:
@@ -168,7 +163,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", action="store_true")
     args = parser.parse_args()
-
     now = time.time()
 
     if args.t:

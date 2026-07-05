@@ -1,5 +1,4 @@
 from skills.weather.weather import WeatherHaApi
-
 ha_weather = WeatherHaApi()
 
 def ask_weather_question(request_str: str) -> str:

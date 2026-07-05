@@ -242,7 +242,7 @@ class WeatherHaApi:
             print(conf.user_content)
             res = llm.generate(conf).get('content', None)
             resp = f'weather_daily: {res} \nTemperature: {result[0].temperature}'
-            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_current.png"])
+            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_hourly.png"])
             return resp
         elif "weather_tomorrow" in [force_mode, mode]:
             result = self.fetch_daily_forecast(1)
@@ -252,7 +252,7 @@ class WeatherHaApi:
             res = llm.generate(conf).get('content', None)
             print(f'weather_tomorrow\n')
             resp = f'weather_tomorrow: {res} \nTemperature: {result.temperature}'
-            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_current.png"])
+            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_daily.png"])
             return resp
         else:
             return 'Failed'
@@ -391,12 +391,12 @@ class WeatherHaApi:
 if __name__ == "__main__":
     try:
         ha_weather = WeatherHaApi()
-        ha_weather.get_llm_payload('Quelle est la météo')
-        ha_weather.get_llm_payload("il fera quel temp aujourd'hui")
-        ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
-        ha_weather.get_llm_payload('', force_mode='weather_current')
+        # ha_weather.get_llm_payload('Quelle est la météo')
+        # ha_weather.get_llm_payload("il fera quel temp aujourd'hui")
+        # ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
+        # ha_weather.get_llm_payload('', force_mode='weather_current')
         ha_weather.get_llm_payload('', force_mode='weather_daily')
-        ha_weather.get_llm_payload('', force_mode='weather_tomorrow')
+        # ha_weather.get_llm_payload('', force_mode='weather_tomorrow')
         
     except Exception as e:
         logger.error(f"Fatal error: {e}")

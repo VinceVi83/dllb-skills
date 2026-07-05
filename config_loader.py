@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 class Utils:
     """Utility Functions for File Operations and Data Formatting
-    
+
     Role: Provides helper methods for data formatting, sending messages to discord (dllb),
           and registering automated tasks in the Orchestrator API.
-    
+
     Methods:
         format_result(result) : Format dict or other result as string.
         send_discord_notification(...) : Sends asynchronous notifications.
@@ -73,32 +73,17 @@ class Utils:
         threading.Thread(target=post_request, daemon=False).start()
 
     @staticmethod
-    def add_oneshot_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
+    def add_cron_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
         try:
-            if isinstance(date_or_timestamp, (int, float)):
-                run_date_str = datetime.fromtimestamp(date_or_timestamp).strftime('%Y-%m-%dT%H:%M:%S')
-            else:
-                try:
-                    if 'T' in str(date_or_timestamp):
-                        date_part, time_part = str(date_or_timestamp).split('T')
-                        time_segments = time_part.split(':')
-                        padded_time = ':'.join(seg.zfill(2) for seg in time_segments)
-                        dt = datetime.fromisoformat(f"{date_part}T{padded_time}")
-                    else:
-                        dt = datetime.fromisoformat(str(date_or_timestamp))
-                    run_date_str = dt.strftime('%Y-%m-%dT%H:%M:%S')
-                except ValueError:
-                    run_date_str = str(date_or_timestamp)
-
+            # Todo
             url = f"http://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
-
             payload = {
                 "id": task_id,
                 "function": function,
                 "trigger_type": "date",
                 "description": description,
-                "cron": None,
-                "run_date": run_date_str,
+                "cron": cron_param,
+                "run_date": None,
                 "args": args if args else [],
                 "status": "active",
                 "state": "active",
@@ -114,10 +99,6 @@ class Utils:
 
     @staticmethod
     def add_oneshot_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
-        """
-        Enregistre une tâche à exécution unique (date) alignée sur le modèle valide.
-        :param date_or_timestamp: Chaîne au format ISO ou timestamp Unix (int/float)
-        """
         try:
             if isinstance(date_or_timestamp, (int, float)):
                 run_date_str = datetime.fromtimestamp(date_or_timestamp).isoformat()
@@ -169,17 +150,15 @@ class LocalFilesFilter(logging.Filter):
 def setup_logging():
     log_dir = cfg.config_dir
     log_dir.mkdir(parents=True, exist_ok=True)
-
     date_format = "%y%m%d:%H:%M:%S"
-    
+
     if getattr(cfg, 'verbose', False):
         log_format = "[%(asctime)s][%(filename)s][%(funcName)s](%(levelname)s): %(message)s"
     else:
         log_format = "[%(asctime)s][%(funcName)s](%(levelname)s): %(message)s"
-    
+
     formatter = logging.Formatter(fmt=log_format, datefmt=date_format)
     local_filter = LocalFilesFilter()
-
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     console_handler.addFilter(local_filter)
@@ -187,17 +166,16 @@ def setup_logging():
     file_handler = logging.FileHandler(log_dir / "debug.log", mode="a", encoding="utf-8")
     file_handler.setFormatter(formatter)
     file_handler.addFilter(local_filter)
-    
     root_logger = logging.getLogger()
+
     if getattr(cfg, 'debug', False):
         root_logger.setLevel(logging.DEBUG)
     else:
         root_logger.setLevel(logging.INFO)
-    
+
     root_logger.handlers = []
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
-
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
 
 

@@ -18,7 +18,7 @@ class JSONProcessor:
         export(self): Export filtered pool to a new file.
         run(self): Main execution loop.
     """
-    
+
     def __init__(self, filepath):
         self.filepath = filepath
         self.data = self._load_json(filepath)
@@ -80,10 +80,8 @@ class JSONProcessor:
     def filter_data(self, is_fuzz=False):
         key = input("Enter key to filter: ").strip()
         val = input(f"Enter {'approximated' if is_fuzz else 'exact'} value: ").strip()
-        
         filtered = []
         occurrences = {}
-        
         for item in self.pool:
             if key in item:
                 item_val = str(item[key])
@@ -92,11 +90,11 @@ class JSONProcessor:
                 if match:
                     filtered.append(item)
                     occurrences[item_val] = occurrences.get(item_val, 0) + 1
-        
+
         print(f"\n-> Filter applied. Remaining: {len(filtered)}")
         for v, count in sorted(occurrences.items(), key=lambda x: x[1], reverse=True):
             print(f" - '{v}': {count} occurrences")
-        
+
         input("\nPress Enter to continue...")
         self.pool = filtered
         self.last_key, self.last_value = key, val
@@ -106,12 +104,12 @@ class JSONProcessor:
         if not self.pool:
             print("Pool is empty, nothing to export.")
             return False
-        
+
         base = os.path.splitext(self.filepath)[0]
         safe_key = self._sanitize_string(self.last_key)
         safe_val = self._sanitize_string(self.last_value)
         out_path = f"{base}_extract_{safe_key}_{safe_val}.json"
-        
+
         try:
             with open(out_path, 'w', encoding='utf-8') as f:
                 json.dump(self.pool, f, indent=4, ensure_ascii=False)
@@ -124,7 +122,7 @@ class JSONProcessor:
     def run(self):
         print("\n--- JSON STRUCTURE SKELETON ---")
         print(json.dumps(self.get_skeleton(self.data), indent=4, ensure_ascii=False))
-        
+
         while True:
             self.display_page()
             print("Options: [1] Fuzz Filter | [2] Strict Filter | [n] Next | [p] Prev | [y] Export | [q] Quit")

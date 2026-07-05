@@ -13,16 +13,14 @@ logger = logging.getLogger(__name__)
 def _extract_json_from_content(content: str) -> Dict[str, Any] | None:
     if not content:
         return None
-    
+
     start = content.find('{')
     end = content.rfind('}')
-    
     if start != -1 and end != -1:
         try:
             return json.loads(content[start:end + 1])
         except Exception:
             pass
-    
     return None
 
 
@@ -32,7 +30,6 @@ def _process_response(data: Dict[str, Any] | None, raw_content: str) -> Dict[str
         for key, value in data.items():
             result[str(key).lower()] = value
         return result
-    
     return {"content": raw_content}
 
 
@@ -45,18 +42,18 @@ def _process_llm_result(response):
 
 class OllamaServiceAsync:
     """Async Ollama Service for LLM interactions
-    
+
     Role: Provides asynchronous LLM generation with Ollama API.
-    
+
     Methods:
         __init__(self) : Initialize async client with local URL.
         generate(self, config) : Generate response asynchronously.
     """
-    
+
     def __init__(self):
         self.local_url = getattr(cfg.ollama, 'local_url', "http://127.0.0.1:11434")
         self.client = AsyncClient(host=self.local_url)
-    
+
     async def generate(self, config):
         try:
             response = await self.client.chat(**config.get_payload())
@@ -67,25 +64,22 @@ class OllamaServiceAsync:
 
 class OllamaService:
     """Sync Ollama Service with WAN/LAN fallback
-    
+
     Role: Manages LLM generation with automatic WAN/LAN routing and health monitoring.
-    
+
     Methods:
         __init__(self) : Initialize sync client with local and WAN URLs.
         generate(self, config_obj) : Generate response with WAN/LAN fallback.
         _monitor_loop(self) : Monitor WAN/LAN availability in background thread.
     """
-    
+
     def __init__(self):
         self.local_url = getattr(cfg.ollama, 'local_url', "http://127.0.0.1:11434")
         self.wan_url = getattr(cfg.ollama, 'wan_url', None)
-        
         self.client_local = Client(host=self.local_url)
         self.client_wan = Client(host=self.wan_url) if self.wan_url else None
-        
         self.is_ready = False
         self.wan_available = False
-
         self._interrupt_monitor = threading.Event()
         threading.Thread(target=self._monitor_loop, daemon=True).start()
 

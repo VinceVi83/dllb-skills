@@ -64,9 +64,9 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 
 class OllamaConfig:
     """Ollama Configuration Manager
-    
+
     Role: Manages Ollama model configuration, system prompts, profiles, and message payloads.
-    
+
     Methods:
         __init__(self, system_prompt, profile, soul, content) : Initialize configuration with optional system prompt, profile, personality, and content.
         set_think(self, active) : Enable/disable thinking mode with adjusted prediction limits.
@@ -77,7 +77,6 @@ class OllamaConfig:
         set_content(self, text, attachments) : Set user content text with optional attachments.
         get_payload(self) : Generate the final Ollama API payload with messages and options.
     """
-    
     def __init__(self, system_prompt: str = None, profile: str = 'default', soul: str = None, content: str = ''):
         self.model = ''
         self.system_prompt = ''
@@ -142,7 +141,7 @@ class OllamaConfig:
         if attachments:
             self._process_attachments(attachments)
         return self
-    
+
     def get_payload(self):
         system_prompt_text = self.system_prompt
         personality_text = self.personality
