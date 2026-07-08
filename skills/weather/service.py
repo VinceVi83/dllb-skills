@@ -4,10 +4,10 @@ ha_weather = WeatherHaApi()
 def ask_weather_question(request_str: str) -> str:
     """
     Answers a generic or complex free-text question about the weather.
-    Use this tool ONLY when the user's request doesn't fit into specific 'current', 'today', or 'tomorrow' queries.
-    
+    Use this tool ONLY when the user's request doesn't fit into specific queries.
+
     Args:
-        request_str: The natural language question or context from the user.
+        request_str: The natural language question from the user. (e.g., 'What is the weather like in Paris?')
     """
     return ha_weather.get_llm_payload(request_str)
 
