@@ -147,7 +147,6 @@ class WeatherHaApi:
     def _fetch_forecast(self, forecast_type):
         url = f"{self.base_url_services()}?return_response"
         payload = {"entity_id": self.city, "type": forecast_type}
-        
         r = requests.post(url, json=payload, headers=self.headers)
         r.raise_for_status()
         raw_list = r.json()["service_response"][self.city]["forecast"]
@@ -224,7 +223,7 @@ class WeatherHaApi:
                 logger.error('Failed')
                 return
 
-        conf.model = 'qwen2.5:7b'
+        conf.model = 'qwen2.5:3b'
         conf.set_system(cfg.agents.weather_daily_report)
         if "weather_current" in [force_mode, mode]:
             result = self.fetch_current_status()

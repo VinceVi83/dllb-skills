@@ -96,8 +96,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         available_functions()
         # test("notify_new_anime")
-        # test("get_today_12h_forecast")
+        test("get_today_12h_forecast")
         test("commute_work")
-        # test("work_commute_ret")
     else:
         mcp.run(transport="sse", host="0.0.0.0", port=13316)
