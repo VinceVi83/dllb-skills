@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from pathlib import Path
-
+import urllib3
 import logging
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ class Utils:
     def add_cron_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
         try:
             # Todo
-            url = f"http://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
+            url = f"https://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
             payload = {
                 "id": task_id,
                 "function": function,
@@ -90,8 +90,8 @@ class Utils:
                 "skip_next": [],
                 "hidden": hidden
             }
-
-            response = requests.post(url, json=payload, timeout=5)
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            response = requests.post(url, json=payload, timeout=5, verify=False)
             return response.json()
         except Exception as e:
             logger.error(f"Failed to add oneshot task {task_id}: {str(e)}")
@@ -104,9 +104,7 @@ class Utils:
                 run_date_str = datetime.fromtimestamp(date_or_timestamp).isoformat()
             else:
                 run_date_str = str(date_or_timestamp)
-
-            url = f"http://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
-
+            url = f"https://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
             payload = {
                 "id": task_id,
                 "function": function,
@@ -120,8 +118,8 @@ class Utils:
                 "skip_next": [],
                 "hidden": hidden
             }
-
-            response = requests.post(url, json=payload, timeout=5)
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            response = requests.post(url, json=payload, timeout=5, verify=False)
             return response.json()
         except Exception as e:
             logger.error(f"Failed to add oneshot task {task_id}: {str(e)}")

@@ -6,7 +6,7 @@ import argparse
 import subprocess
 from bs4 import BeautifulSoup
 from config_loader import Utils
-from datetime import datetime, time as dt_time
+from datetime import datetime, time as dt_time, timedelta
 
 class AnimeCard:
     """Anime Card Representation
@@ -146,6 +146,7 @@ def notify_new_anime():
     """
     _livechart_scrap()
     today_start = datetime.combine(datetime.now(), dt_time.min).timestamp()
+    # today_end = datetime.combine(datetime.now() + timedelta(days=2), dt_time.max).timestamp()
     today_end = datetime.combine(datetime.now(), dt_time.max).timestamp()
     for anime in DICO_ANIMES.values():
         if anime.timestamp:
