@@ -145,9 +145,8 @@ def notify_new_anime():
     scheduled to release today.
     """
     _livechart_scrap()
-    today_start = datetime.combine(datetime.now(), dt_time.min).timestamp()
-    # today_end = datetime.combine(datetime.now() + timedelta(days=2), dt_time.max).timestamp()
-    today_end = datetime.combine(datetime.now(), dt_time.max).timestamp()
+    today_start = datetime.now().timestamp()
+    today_end = (datetime.now() + timedelta(days=1)).timestamp()
     for anime in DICO_ANIMES.values():
         if anime.timestamp:
             try:
@@ -171,3 +170,5 @@ if __name__ == "__main__":
         if valid_animes:
             closest_anime = min(valid_animes, key=lambda x: abs(int(x.timestamp) - now))
             _notif(closest_anime.name)
+    else:
+        notify_new_anime()
