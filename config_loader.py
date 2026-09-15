@@ -75,7 +75,6 @@ class Utils:
     @staticmethod
     def add_cron_task(task_id: str, function: str, date_or_timestamp, description: str = "", args: list = None, hidden: str = "yes"):
         try:
-            # Todo
             url = f"https://{cfg.agenda_task.host}:{cfg.agenda_task.port}/tasks"
             payload = {
                 "id": task_id,

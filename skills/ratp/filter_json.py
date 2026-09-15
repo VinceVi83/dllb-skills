@@ -77,19 +77,34 @@ class JSONProcessor:
         else:
             return item_val.lower() == val.lower()
 
+    def _find_key_values(self, item, target_key):
+        """Recursively yield all values associated with target_key in item."""
+        if isinstance(item, dict):
+            for k, v in item.items():
+                if k == target_key:
+                    yield v
+                elif isinstance(v, (dict, list)):
+                    yield from self._find_key_values(v, target_key)
+        elif isinstance(item, list):
+            for elem in item:
+                yield from self._find_key_values(elem, target_key)
+
     def filter_data(self, is_fuzz=False):
         key = input("Enter key to filter: ").strip()
         val = input(f"Enter {'approximated' if is_fuzz else 'exact'} value: ").strip()
         filtered = []
         occurrences = {}
         for item in self.pool:
-            if key in item:
-                item_val = str(item[key])
-                match = self._match_value(item_val, val, is_fuzz)
-                
-                if match:
-                    filtered.append(item)
-                    occurrences[item_val] = occurrences.get(item_val, 0) + 1
+            found_values = list(self._find_key_values(item, key))
+            if found_values:
+                for raw_val in found_values:
+                    item_val = str(raw_val)
+                    match = self._match_value(item_val, val, is_fuzz)
+                    
+                    if match:
+                        filtered.append(item)
+                        occurrences[item_val] = occurrences.get(item_val, 0) + 1
+                        break
 
         print(f"\n-> Filter applied. Remaining: {len(filtered)}")
         for v, count in sorted(occurrences.items(), key=lambda x: x[1], reverse=True):
