@@ -1,6 +1,9 @@
 from skills.ratp.departure_alert_ratp import Trip, Line, fetch_itinerary
-from config_loader import cfg, Utils
 from datetime import datetime
+from common.conf_manager import cfg, setup_logging, Utils
+
+import logging
+logger = logging.getLogger(__name__)
 
 def create_trip(config_section):
     dest = [Line(**line.to_dict()) for line in config_section.dest]

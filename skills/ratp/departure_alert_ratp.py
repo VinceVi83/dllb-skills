@@ -2,8 +2,11 @@ import requests
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 from typing import List
-from config_loader import cfg, Utils
 import re
+from common.conf_manager import cfg, setup_logging, Utils
+
+import logging
+logger = logging.getLogger(__name__)
 
 API_TOKEN = cfg.ratp.token
 
@@ -320,6 +323,7 @@ def test_commute():
     )
 
 if __name__ == "__main__":
+    setup_logging()
     test_commute()
     # outbound = [Line('10', 'Pont de Saint-Cloud', '21970', 'C01380', 5), Line('13', 'Saint-Denis-Université', '22229', 'C01383', 5)]
     # returns = [Line('9', 'Montreuil', '462914', 'C01379', 5)]

@@ -4,11 +4,15 @@ import importlib
 import inspect
 from datetime import datetime
 from fastmcp import FastMCP
-from config_loader import cfg
 import asyncio
+from common.conf_manager import cfg, setup_logging
+
+import logging
+setup_logging()
+logger = logging.getLogger(__name__)
 
 EXCLUDE_DIRS = {"__pycache__", "agents", "data", "index_db"}
-EXCLUDE_FILES = {"server_mcp.py", "config_loader.py", "mcp_cli.py"}
+EXCLUDE_FILES = {"server_mcp.py", "mcp_cli.py"}
 
 def auto_register_tools(mcp_instance, root_dir):
     for root, dirs, files in os.walk(root_dir):
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         available_functions()
         test("notify_new_anime")
-        # test("get_today_12h_forecast")
-        # test("commute_work")
+        test("get_today_12h_forecast")
+        test("commute_work")
     else:
         mcp.run(transport="sse", host="0.0.0.0", port=13316)

@@ -2,12 +2,12 @@ import json
 import os
 import requests
 from dataclasses import dataclass, is_dataclass, fields
-from tools.ollama_config import OllamaConfig
-from tools.ollama_service import llm
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
-from config_loader import cfg, Utils
 from PIL import Image, ImageDraw, ImageFont
+from common.llm_client  import llm
+from common.conf_manager import cfg, Utils, setup_logging
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def print_table(data: Any):
     elif isinstance(data, list) and len(data) > 0 and is_dataclass(data[0]):
         items = data
     else:
-        print("Error: Provided data must be a dataclass or a list of dataclasses.")
+        logger.info("Error: Provided data must be a dataclass or a list of dataclasses.")
         return
 
     headers = [f.name.upper() for f in fields(items[0])]
@@ -106,14 +106,14 @@ def print_table(data: Any):
             col_widths[i] = max(col_widths[i], len(val))
 
     border = "+" + "+".join("-" * (w + 2) for w in col_widths) + "+"
-    print(border)
+    logger.info(border)
     header_line = "|" + "|".join(f" {headers[i]:<{col_widths[i]}} " for i in range(len(headers))) + "|"
-    print(header_line)
-    print(border)
+    logger.info(header_line)
+    logger.info(border)
     for row in rows:
         row_line = "|" + "|".join(f" {row[i]:<{col_widths[i]}} " for i in range(len(row))) + "|"
-        print(row_line)
-    print(border)
+        logger.info(row_line)
+    logger.info(border)
 
 
 class WeatherHaApi:
@@ -209,48 +209,36 @@ class WeatherHaApi:
         return daily_list[offset]
 
     def get_llm_payload(self, request: str, force_mode=None) -> Dict[str, Any]:
-        conf = OllamaConfig()
-        # res = llm.generate(conf).get('content', "")
         mode = ''
 
         if not force_mode:
-            conf.model = 'qwen2.5:3b'
-            conf.set_system(cfg.agents.select_weather_report)
-            conf.set_content(request)
-            mode = llm.generate(conf).get('content', None)
-            print(f'AAA  {request}  {mode}')
+            mode = llm.call(cfg.agents.select_weather_report, request, model='qwen2.5:3b')
+            logger.info(f'{request}  {mode}')
             if not mode:
                 logger.error('Failed')
                 return
+            mode = mode['content']
 
-        conf.model = 'qwen2.5:3b'
-        conf.set_system(cfg.agents.weather_daily_report)
         if "weather_current" in [force_mode, mode]:
             result = self.fetch_current_status()
             self.generate_weather_card(result, "/tmp/weather_current.png", "current")
-            conf.user_content = format_for_llm(result)
-            print(conf.user_content)
-            res = llm.generate(conf).get('content', None)
-            resp = f'weather_current: {res} \nTemperature: {result.temperature}'
+            res = llm.call(cfg.agents.weather_daily_report, str(result), model='qwen2.5:32b-instruct-q4_K_M')
+            resp = f'weather_current: {res['content']} \nTemperature: {result.temperature}'
             Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_current.png"])
             return resp
         elif "weather_daily" in [force_mode, mode]:
             result = self.fetch_hourly_forecast(10)
             self.generate_weather_card(result, "/tmp/weather_hourly.png", "hourly")
-            conf.user_content = format_for_llm(result)
-            print(conf.user_content)
-            res = llm.generate(conf).get('content', None)
-            resp = f'weather_daily: {res} \nTemperature: {result[0].temperature}'
+            res = llm.call(cfg.agents.weather_daily_report, str(result), model='qwen2.5:32b-instruct-q4_K_M')
+            resp = f'weather_daily: {res['content']} \nTemperature: {result[0].temperature}'
             Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_hourly.png"])
             return resp
         elif "weather_tomorrow" in [force_mode, mode]:
             result = self.fetch_daily_forecast(1)
             self.generate_weather_card(result, "/tmp/weather_daily.png", "daily")
-            conf.user_content = format_for_llm(result)
-            print(conf.user_content)
-            res = llm.generate(conf).get('content', None)
-            print(f'weather_tomorrow\n')
-            resp = f'weather_tomorrow: {res} \nTemperature: {result.temperature}'
+            res = llm.call(cfg.agents.weather_daily_report, str(result), model='qwen2.5:32b-instruct-q4_K_M')
+            logger.info(f'weather_tomorrow {res}\n')
+            resp = f'weather_tomorrow: {res['content']} \nTemperature: {result.temperature}'
             Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_daily.png"])
             return resp
         else:
@@ -389,12 +377,15 @@ class WeatherHaApi:
 
 if __name__ == "__main__":
     try:
+        setup_logging()
+        logger = logging.getLogger(__name__)
         ha_weather = WeatherHaApi()
+
         # ha_weather.get_llm_payload('Quelle est la météo')
         # ha_weather.get_llm_payload("il fera quel temp aujourd'hui")
-        # ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
+        ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
         # ha_weather.get_llm_payload('', force_mode='weather_current')
-        ha_weather.get_llm_payload('', force_mode='weather_daily')
+        # ha_weather.get_llm_payload('', force_mode='weather_daily')
         # ha_weather.get_llm_payload('', force_mode='weather_tomorrow')
         
     except Exception as e:

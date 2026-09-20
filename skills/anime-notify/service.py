@@ -5,8 +5,11 @@ import time
 import argparse
 import subprocess
 from bs4 import BeautifulSoup
-from config_loader import Utils
 from datetime import datetime, time as dt_time, timedelta
+from common.conf_manager import cfg, setup_logging, Utils
+
+import logging
+logger = logging.getLogger(__name__)
 
 class AnimeCard:
     """Anime Card Representation
@@ -160,6 +163,7 @@ target_file = "skills/anime-notify/www_livechart_me_raw.html"
 _, DICO_ANIMES = _extract_and_filter_animes(target_file, hide_releases=False, sort_by_countdown=True)
 
 if __name__ == "__main__":
+    setup_logging()
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", action="store_true")
     args = parser.parse_args()
