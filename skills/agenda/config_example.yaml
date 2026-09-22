@@ -1,0 +1,12 @@
+calendar:
+  LINK_CALENDAR: https://calendar.proton.me/api/calendar/v1/url/
+  PATH_ICS_TEMPLATE: skills/agenda/template_concert.ics
+mail:
+  DOMAIN: domain.com
+  IP_MAIL: 127.0.0.1
+  MAIL_TO: user@domain.com
+  PORT_SMTP_MAIL: 1025
+  PWD_MAIL: password
+  USERNAME: name
+  USER_MAIL: user@domain.com
+  name: name
