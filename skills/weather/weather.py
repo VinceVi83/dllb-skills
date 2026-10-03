@@ -5,12 +5,11 @@ from dataclasses import dataclass, is_dataclass, fields
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from PIL import Image, ImageDraw, ImageFont
-from common.llm_client  import llm
+from common.llm_client import llm
 from common.conf_manager import cfg, Utils, setup_logging
 
 import logging
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class WeatherHour:
@@ -19,7 +18,6 @@ class WeatherHour:
     temperature: float
     precipitation: float
 
-
 @dataclass
 class WeatherDay:
     timestamp: datetime
@@ -27,13 +25,11 @@ class WeatherDay:
     temperature: float
     precipitation_probability: Optional[int]
 
-
 @dataclass
 class WeatherStatus:
     status: str
     temperature: float
     last_update: str
-
 
 def format_for_llm(data: Any) -> str:
     if is_dataclass(data):
@@ -115,12 +111,11 @@ def print_table(data: Any):
         logger.info(row_line)
     logger.info(border)
 
-
 class WeatherHaApi:
     """Home Assistant Weather API Client
-    
+
     Role: Fetches and formats weather data from Home Assistant and generates weather cards.
-    
+
     Methods:
         __init__(self) : Initialize the WeatherHaApi instance with Home Assistant credentials.
         base_url_services(self) : Get the base URL for weather service endpoints.
@@ -128,7 +123,6 @@ class WeatherHaApi:
         fetch_current_status(self) : Get current weather status from Home Assistant.
         fetch_hourly_forecast(self, limit) : Get hourly weather forecast from Home Assistant.
         fetch_daily_forecast(self, offset) : Get daily weather forecast from Home Assistant.
-        get_llm_payload(self, request, force_mode) : Generate LLM payload for weather reports.
         generate_weather_card(self, weather_data, output_path, card_type) : Generate weather card image.
     """
 
@@ -151,6 +145,13 @@ class WeatherHaApi:
         r.raise_for_status()
         raw_list = r.json()["service_response"][self.city]["forecast"]
         return raw_list
+
+    def run_weather_mode(self, card_type: str) -> str:
+        result = self._fetch_weather_data(card_type)
+        card_path = self._get_card_path(card_type)
+        self.generate_weather_card(result, card_path, card_type)
+        report = self._generate_report(card_type, result)
+        return report
 
     def fetch_current_status(self) -> WeatherStatus:
         r = requests.get(f"{self.host}/states/{self.city}", headers=self.headers)
@@ -208,41 +209,40 @@ class WeatherHaApi:
             ))
         return daily_list[offset]
 
-    def get_llm_payload(self, request: str, force_mode=None) -> Dict[str, Any]:
-        mode = ''
+    def _get_card_path(self, card_type: str) -> str:
+        """Get card path based on card type."""
+        paths = {
+            "current": "/tmp/weather_current.png",
+            "hourly": "/tmp/weather_hourly.png",
+            "daily": "/tmp/weather_daily.png",
+        }
+        return paths.get(card_type, "/tmp/weather_output.png")
 
-        if not force_mode:
-            mode = llm.call(cfg.agents.select_weather_report, request, model='qwen2.5:3b')
-            logger.info(f'{request}  {mode}')
-            if not mode:
-                logger.error('Failed')
-                return
-            mode = mode['content']
-
-        if "weather_current" in [force_mode, mode]:
-            result = self.fetch_current_status()
-            self.generate_weather_card(result, "/tmp/weather_current.png", "current")
-            res = llm.call(cfg.agents.weather_daily_report, str(result), model='qwen2.5:32b-instruct-q4_K_M')
-            resp = f'weather_current: {res['content']} \nTemperature: {result.temperature}'
-            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_current.png"])
-            return resp
-        elif "weather_daily" in [force_mode, mode]:
-            result = self.fetch_hourly_forecast(10)
-            self.generate_weather_card(result, "/tmp/weather_hourly.png", "hourly")
-            res = llm.call(cfg.agents.weather_daily_report, str(result), model='qwen2.5:32b-instruct-q4_K_M')
-            resp = f'weather_daily: {res['content']} \nTemperature: {result[0].temperature}'
-            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_hourly.png"])
-            return resp
-        elif "weather_tomorrow" in [force_mode, mode]:
-            result = self.fetch_daily_forecast(1)
-            self.generate_weather_card(result, "/tmp/weather_daily.png", "daily")
-            res = llm.call(cfg.agents.weather_daily_report, str(result), model='qwen2.5:32b-instruct-q4_K_M')
-            logger.info(f'weather_tomorrow {res}\n')
-            resp = f'weather_tomorrow: {res['content']} \nTemperature: {result.temperature}'
-            Utils.send_discord_notification(resp, channel='notify-me', files=["/tmp/weather_daily.png"])
-            return resp
+    def _fetch_weather_data(self, card_type: str) -> Any:
+        """Fetch weather data based on card type."""
+        if card_type == "current":
+            return self.fetch_current_status()
+        elif card_type == "hourly":
+            return self.fetch_hourly_forecast(10)
         else:
-            return 'Failed'
+            return self.fetch_daily_forecast(1)
+
+    def _generate_report(self, card_type: str, result: Any) -> str:
+        response = llm.call(cfg.agents.weather_daily_report, format_for_llm(result))
+        if card_type == "current":
+            text = f"weather_current: {response['content']} \nTemperature: {result.temperature}"
+        elif card_type == "hourly":
+            text = f"weather_hourly: {response['content']} \nTemperature: {result[0].temperature}"
+        else:
+            text = f"weather_tomorrow: {response['content']} \nTemperature: {result.temperature}"
+
+        card_path = self._get_card_path(card_type)
+        Utils.send_discord_notification(
+            text,
+            channel="notify-me",
+            files=[card_path],
+        )
+        return text
 
     def generate_weather_card(self, weather_data: Any, output_path: str = "/tmp/weather_output.png", card_type: str = "hourly") -> str:
         if os.path.exists(output_path):
@@ -262,7 +262,7 @@ class WeatherHaApi:
             logger.warning(f"Missing folder: {ICONS_FOLDER}, using fallback icons")
 
         CARD_WIDTH = 550
-        CARD_HEIGHT = 210 if card_type == "hourly" else 300 if card_type == "daily" else 350
+        CARD_HEIGHT = 210 if card_type == "hourly" else 300 if card_type == "current" else 350
         BACKGROUND_COLOR = (28, 28, 30)
         TEXT_WHITE = (227, 227, 227)
         TEXT_GRAY = (142, 142, 147)
@@ -380,13 +380,8 @@ if __name__ == "__main__":
         setup_logging()
         logger = logging.getLogger(__name__)
         ha_weather = WeatherHaApi()
-
-        # ha_weather.get_llm_payload('Quelle est la météo')
-        # ha_weather.get_llm_payload("il fera quel temp aujourd'hui")
-        ha_weather.get_llm_payload("c'est quoi la méteo demain ?")
-        # ha_weather.get_llm_payload('', force_mode='weather_current')
-        # ha_weather.get_llm_payload('', force_mode='weather_daily')
-        # ha_weather.get_llm_payload('', force_mode='weather_tomorrow')
-        
+        ha_weather.run_weather_mode("current")
+        ha_weather.run_weather_mode("hourly")
+        ha_weather.run_weather_mode("daily")
     except Exception as e:
         logger.error(f"Fatal error: {e}")

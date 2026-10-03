@@ -115,7 +115,7 @@ def discover_test_cases():
             continue
         test_cases_list = None
         for name, obj in inspect.getmembers(module):
-            is_test_cases_list = isinstance(obj, list) and (name == "TEST_CASES" or name.endswith("_TEST_CASES"))
+            is_test_cases_list = isinstance(obj, list) and name == "TEST_CASES"
             if is_test_cases_list:
                 test_cases_list = obj
                 break
@@ -202,9 +202,11 @@ def create_server() -> FastMCP:
 
     @mcp_instance.tool()
     def test_ask_router():
+        cfg.debug = True
         all_cases = discover_test_cases()
         if not all_cases:
             logger.warning("[test_ask_router] No TEST_CASES found in any skill")
+            cfg.debug = False
             return "No test cases found"
         results = []
         for skill_name, test_request, expected_tool, validator in all_cases:
@@ -212,10 +214,12 @@ def create_server() -> FastMCP:
             results.append(result)
         summary_text = build_summary(results)
         logger.info(summary_text)
+        cfg.debug = False
         return summary_text
 
     @mcp_instance.tool()
     def run_all_unit_tests() -> str:
+        cfg.debug = True
         results = []
         for rel_path in find_service_files():
             mod_name = path_to_module_name(rel_path)
@@ -235,6 +239,7 @@ def create_server() -> FastMCP:
                         results.append(f"=== {name} ===\n{test_result}\n")
                     except Exception as e:
                         results.append(f"=== {name} ===\n[ERROR] {str(e)}\n")
+        cfg.debug = False
         return "\n".join(results) if results else "No unit tests found."
     return mcp_instance
 
@@ -266,14 +271,6 @@ def find_tool_by_name(tools_list, tool_name):
             return t
     return None
 
-def run_tool_and_log(tool):
-    result = asyncio.run(tool.run({}))
-    if hasattr(result, "content") and result.content:
-        text = result.content[0].text
-    else:
-        text = str(result)
-    logger.info("\n" + text)
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         command = sys.argv[1]
@@ -281,13 +278,11 @@ if __name__ == "__main__":
             available_functions()
             tools_list = asyncio.run(mcp.list_tools())
             test_ask_tool = find_tool_by_name(tools_list, "test_ask_router")
-            if test_ask_tool:
-                run_tool_and_log(test_ask_tool)
+            asyncio.run(test_ask_tool.run({}))
 
         elif command == "all":
             tools_list = asyncio.run(mcp.list_tools())
             unit_test_tool = find_tool_by_name(tools_list, "run_all_unit_tests")
-            if unit_test_tool:
-                run_tool_and_log(unit_test_tool)
+            asyncio.run(unit_test_tool.run({}))
     else:
         mcp.run(transport="sse", host="0.0.0.0", port=13316)

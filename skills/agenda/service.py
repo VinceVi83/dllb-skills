@@ -77,7 +77,7 @@ def ask_agenda(request_str: str) -> str:
 
     res = str(fn(**args))
     
-    if True:
+    if cfg.debug:
         logger.info(f"Tool called: {tool_name}\n{res if len(res) < 600 else res[:600] + ' ... [truncated]'}")
         return f"Tool called: {tool_name}\n{res}"
     return res
@@ -143,15 +143,15 @@ def mail_me_next_concert() -> dict:
     return calendar.mail_me_next_concert()
 
 TEST_CASES = [
-    # ("What is my agenda for today?", "get_calendar_events_today"),
-    # ("What is my agenda for tomorrow?", "get_calendar_events_tomorrow"),
+    ("What is my agenda for today?", "get_calendar_events_today"),
+    ("What is my agenda for tomorrow?", "get_calendar_events_tomorrow"),
     ("What is my agenda in 3 days?", "get_calendar_events_in_days"),
-    # ("What is my agenda for this week?", "get_calendar_events_this_week"),
-    # ("What is my agenda for next week?", "get_calendar_events_next_week"),
-    # ("Is there anything in the next 10 days?", "get_calendar_events_upcoming"),
+    ("What is my agenda for this week?", "get_calendar_events_this_week"),
+    ("What is my agenda for next week?", "get_calendar_events_next_week"),
+    ("Is there anything in the next 10 days?", "get_calendar_events_upcoming"),
     ("What is my next event?", "get_next_calendar_event"),
     ("What is my next concert?", "get_next_concert"),
-    # ("Mail me my next concert info", "mail_me_next_concert"),
+    ("Mail me my next concert info", "mail_me_next_concert"),
     ("Tell me a joke", None),
 ]
 
