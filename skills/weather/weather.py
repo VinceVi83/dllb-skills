@@ -326,7 +326,7 @@ class WeatherHaApi:
             draw.text((20, 16), "Weather", font=font_title, fill=TEXT_WHITE)
             current = forecast_data[0]
             draw.text((85, 48), CONDITION_MAPPING.get(current["condition"], {"text": "Cloudy"})["text"], font=font_state, fill=TEXT_WHITE)
-            draw.text((85, 82), "Boulogne-Billancourt", font=font_location, fill=TEXT_GRAY)
+            draw.text((85, 82), cfg.home_assistant.city, font=font_location, fill=TEXT_GRAY)
 
             paste_png_icon(img, current["condition"], 20, 48, 50)
             temp_str = f"{round(current['temperature'])}°C"
