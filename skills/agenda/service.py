@@ -50,28 +50,12 @@ def _build_tools_prompt() -> str:
         json.dumps(tools, indent=2, ensure_ascii=False, default=str),
     )
 
+    tools_prompt = json.dumps(tools, indent=2, ensure_ascii=False, default=str)
+    return f"{context}\n\nAvailable tools:\n{tools_prompt}"
 
-def _synthesize(request_str: str, result: str) -> str:
-    """Turn raw tool output into a human answer. Empty result → no LLM call."""
-    if result.strip() in ("", "[]", "{}", "None"):
-        return "Nothing scheduled."
-
-    system = cfg.agents.agenda_secretary.replace(
-        "{{NOW}}", datetime.now().strftime("%A, %d %B %Y %H:%M")
-    )
-    user = f"# User request\n{request_str}\n\n# Raw data\n{result}"
-    return llm.call(system, user, model=cfg.llm_models.creative)
 
 def ask_agenda(request_str: str) -> str:
-    """
-    Answer any free-text question about the user's agenda: today's events,
-    the week, the next concert, reasoning/filtering across several events,
-    or anything that doesn't map to a dedicated query.
-
-    Args:
-        request_str: The natural language question from the user.
-                     (e.g. 'Do I have anything important next Tuesday?')
-    """
+    """Answer any question about the user's agenda, events, calendar, or concerts."""
 
     local_res = llm.call(_build_tools_prompt(), request_str, model=cfg.llm_models.mcp)
     decision = json.loads(local_res['content'])
@@ -91,10 +75,11 @@ def ask_agenda(request_str: str) -> str:
         if k in sig.parameters
     }
 
-    res = _synthesize(request_str, str(fn(**args)))
-    if isinstance(res, dict):
-        logger.debug("_synthesize: dict branch -> res['content']")
-        return res.get("content", "")
+    res = str(fn(**args))
+    
+    if True:
+        logger.info(f"Tool called: {tool_name}\n{res if len(res) < 600 else res[:600] + ' ... [truncated]'}")
+        return f"Tool called: {tool_name}\n{res}"
     return res
 
 
@@ -157,22 +142,23 @@ def mail_me_next_concert() -> dict:
     logger.info('')
     return calendar.mail_me_next_concert()
 
-if __name__ == "__main__":
-    # print(_build_tools_prompt())
-    cases = [
-        ("today",     "What do I have today?"),
-        ("tomorrow",  "And tomorrow, what do I have?"),
-        ("in_days",   "What do I have in 3 days?"),
-        ("this_week", "Show me this week's events"),
-        ("next_week", "And next week?"),
-        ("upcoming",  "Is there anything in the next 10 days?"),
-        ("next",      "What is my next event?"),
-        ("concert",   "What is the next concert?"),
-        ("mail",      "Send me the next concert info by mail"),
-        ("nomatch",   "Tell me a joke"),
-    ]
+TEST_CASES = [
+    # ("What is my agenda for today?", "get_calendar_events_today"),
+    # ("What is my agenda for tomorrow?", "get_calendar_events_tomorrow"),
+    ("What is my agenda in 3 days?", "get_calendar_events_in_days"),
+    # ("What is my agenda for this week?", "get_calendar_events_this_week"),
+    # ("What is my agenda for next week?", "get_calendar_events_next_week"),
+    # ("Is there anything in the next 10 days?", "get_calendar_events_upcoming"),
+    ("What is my next event?", "get_next_calendar_event"),
+    ("What is my next concert?", "get_next_concert"),
+    # ("Mail me my next concert info", "mail_me_next_concert"),
+    ("Tell me a joke", None),
+]
 
-    for label, req in cases:
+
+def TU_agenda():
+    results = []
+    for label, req in TEST_CASES:
         logger.info(f"=== {label} ===> {req}")
         try:
             out = ask_agenda(req)
@@ -180,4 +166,10 @@ if __name__ == "__main__":
             logger.exception("ask_agenda crashed")
             continue
         if out:
+            results.append(f"{label}: {out if len(out) < 600 else out[:600] + ' ... [truncated]'}")
             logger.info(out if len(out) < 600 else out[:600] + " ... [truncated]")
+    return "\n".join(results)
+
+
+if __name__ == "__main__":
+    TU_agenda()
