@@ -8,7 +8,7 @@ import asyncio
 from common.conf_manager import cfg, setup_logging
 from common.llm_client import llm
 from fastmcp import FastMCP
-
+import traceback
 import logging
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -88,19 +88,28 @@ def generate_ask_tools_prompt():
     return template_content.replace("{{ASK_TOOLS_LIST}}", ask_tools_list)
 
 def ask(request_str: str) -> str:
-    """Route une requête utilisateur vers le bon tool ask_* via le LLM."""
-    system_prompt = generate_ask_tools_prompt()
-    raw = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
-    tool_name = raw.get("content", "").strip()
-    if not tool_name or tool_name == "None":
-        return "No matching ask_* tool found for the request."
-    if tool_name not in ask_tools_registry:
-        return f"Unknown ask_* tool: {tool_name}"
-    fn = ask_tools_registry[tool_name]
-    result = fn(request_str)
-    if cfg.get("debug", False):
-        return f"Tool called: {tool_name}\n{result}"
-    return result
+    """Route a user request to the appropriate ask_* tool via the LLM."""
+    try:
+        system_prompt = generate_ask_tools_prompt()
+        raw = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp, mode='summarize')
+        tool_name = raw.get("content", "").strip()
+        if not tool_name or tool_name == "None":
+            return "No matching ask_* tool found for the request."
+        if tool_name not in ask_tools_registry:
+            logger.warning(f"[ask] unknown tool {tool_name!r}, registry={list(ask_tools_registry)}")
+            return f"Unknown ask_* tool: {tool_name}"
+
+        fn = ask_tools_registry[tool_name]
+        logger.info(f"[ask] calling tool: {tool_name}")
+        result = fn(request_str)
+        logger.info(f"[ask] tool result: {str(result)[:200]!r}")
+
+        if cfg.get("debug", False):
+            return f"Tool called: {tool_name}\n{result}"
+        return f"{result}"
+    except Exception as e:
+        logger.error(f"[ask] EXCEPTION: {e}\n{traceback.format_exc()}")
+        return f"ERROR in ask: {e}"
 
 def discover_test_cases():
     all_cases = []
@@ -275,6 +284,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         command = sys.argv[1]
         if command == "test":
+            # ask("Éteins la lumière dans la cuisine.")
+            # ask("Quel est mon prochain RDV")
             available_functions()
             tools_list = asyncio.run(mcp.list_tools())
             test_ask_tool = find_tool_by_name(tools_list, "test_ask_router")

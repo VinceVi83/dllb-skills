@@ -228,7 +228,7 @@ class WeatherHaApi:
             return self.fetch_daily_forecast(1)
 
     def _generate_report(self, card_type: str, result: Any) -> str:
-        response = llm.call(cfg.agents.weather_daily_report, format_for_llm(result))
+        response = llm.call(cfg.agents.weather_weather_daily_report, format_for_llm(result))
         if card_type == "current":
             text = f"weather_current: {response['content']} \nTemperature: {result.temperature}"
         elif card_type == "hourly":

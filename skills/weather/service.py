@@ -52,7 +52,7 @@ def get_tomorrow_forecast() -> str:
 
 def ask_weather_question(request_str: str) -> str:
     """Answer any question about weather, forecast, or temperature."""
-    response = llm.call(cfg.agents.select_weather_report, request_str)
+    response = llm.call(cfg.agents.weather_select_weather_report, request_str)
     if not response:
         return "Failed to select weather mode"
     mode = response.get('content', '')
