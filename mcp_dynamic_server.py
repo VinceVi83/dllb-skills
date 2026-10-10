@@ -36,7 +36,7 @@ def auto_register_tools(mcp_instance):
     service_files = find_service_files()
     for rel_path in service_files:
         mod_name = path_to_module_name(rel_path)
-        logger.info(f"[Scan] Checking target service file: {rel_path} (module: {mod_name})")
+        logger.debug(f"[Scan] Checking target service file: {rel_path} (module: {mod_name})")
         try:
             module = importlib.import_module(mod_name)
         except Exception as e:
@@ -45,7 +45,7 @@ def auto_register_tools(mcp_instance):
         for name, obj in inspect.getmembers(module):
             is_public_function = inspect.isfunction(obj) and not name.startswith("_")
             if is_public_function and obj.__module__ == module.__name__ and obj.__doc__:
-                logger.info(f"  -> Found function tool: {name}")
+                logger.debug(f"  -> Found function tool: {name}")
                 mcp_instance.tool()(obj)
                 if name.startswith("ask_"):
                     ask_tools_registry[name] = obj
@@ -210,21 +210,31 @@ def create_server() -> FastMCP:
         return ask(request_str)
 
     @mcp_instance.tool()
-    def test_ask_router():
+    def test_ask_router(skill_filter: str = "") -> str:
+        """Run ask-router tests. Optional skill_filter (partial, case-insensitive)."""
         cfg.debug = True
-        all_cases = discover_test_cases()
-        if not all_cases:
-            logger.warning("[test_ask_router] No TEST_CASES found in any skill")
+        try:
+            all_cases = discover_test_cases()
+            if not all_cases:
+                return "No test cases found"
+
+            if skill_filter:
+                f = skill_filter.lower()
+                matched = [c for c in all_cases if f in c[0].lower()]
+                if not matched:
+                    avail = sorted({c[0] for c in all_cases})
+                    return (
+                        f"No skill matching '{skill_filter}'.\nAvailable:\n  "
+                        + "\n  ".join(avail)
+                    )
+                all_cases = matched
+
+            results = [run_one_test(*c) for c in all_cases]
+            summary_text = build_summary(results)
+            logger.info(summary_text)
+            return summary_text
+        finally:
             cfg.debug = False
-            return "No test cases found"
-        results = []
-        for skill_name, test_request, expected_tool, validator in all_cases:
-            result = run_one_test(skill_name, test_request, expected_tool, validator)
-            results.append(result)
-        summary_text = build_summary(results)
-        logger.info(summary_text)
-        cfg.debug = False
-        return summary_text
 
     @mcp_instance.tool()
     def run_all_unit_tests() -> str:
@@ -280,16 +290,22 @@ def find_tool_by_name(tools_list, tool_name):
             return t
     return None
 
+def list_skills():
+    skills_dir = Path(__file__).parent / "skills"
+    return sorted(p.parent.name for p in skills_dir.glob("*/service.py"))
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         command = sys.argv[1]
         if command == "test":
-            # ask("Éteins la lumière dans la cuisine.")
-            # ask("Quel est mon prochain RDV")
             available_functions()
             tools_list = asyncio.run(mcp.list_tools())
             test_ask_tool = find_tool_by_name(tools_list, "test_ask_router")
-            asyncio.run(test_ask_tool.run({}))
+            skill_filter = sys.argv[2] if len(sys.argv) > 2 else ""
+            asyncio.run(test_ask_tool.run({"skill_filter": skill_filter}))
+
+        elif command == "skill":
+            print("\n".join(list_skills()))
 
         elif command == "all":
             tools_list = asyncio.run(mcp.list_tools())

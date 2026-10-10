@@ -1,72 +1,76 @@
 from common.conf_manager import cfg, setup_logging, Utils
 from common.llm_client import llm
+from datetime import datetime
+import json
+
 import logging
 logger = logging.getLogger(__name__)
 
 TEST_CASES = [
     ("Allume toutes les lumières.", "ask_control_multiroom"),
-    ("Envoie un message sur Discord : je vais faire les courses.", "ask_announcement"),
-    ("Diffuse mon message : je vais faire les courses.", "ask_announcement"),
+    ("Envoie un message sur Discord : Je vais aller à la gare.", "ask_send_msg"),
+    ("Diffuse mon message : je vais aller à la gare.", "ask_send_msg"),
+    ("Dans 2 minutes, envoie moi un message que je dois aller acheter du pain.", "ask_send_msg"),
     ("Éteins toutes les lumières.", "ask_control_multiroom"),
 ]
 
-def ask_create_task(request_str: str) -> str:
-    """Create a one-shot or recurring task that will re-call ask later."""
-    logger.info(f"ask_create_task: {request_str}")
-    now = datetime.now()
-    system_prompt = (
-        f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')} "
-        f"({now.strftime('%A')})\n\n"
-        + _build_tools_prompt()
-    )
+# def ask_create_task(request_str: str) -> str:
+#     """Create a one-shot or recurring task that will re-call ask later."""
+#     logger.info(f"ask_create_task: {request_str}")
+#     now = datetime.now()
+#     system_prompt = (
+#         f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')} "
+#         f"({now.strftime('%A')})\n\n"
+#         + cfg.agents.common_create_task
+#     )
 
-    local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
-    try:
-        decision = json.loads(local_res["content"])
-    except (json.JSONDecodeError, KeyError):
-        return f"LLM returned invalid JSON: {local_res.get('content', '')[:200]}"
+#     local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
+#     try:
+#         decision = json.loads(local_res["content"])
+#     except (json.JSONDecodeError, KeyError):
+#         return f"LLM returned invalid JSON: {local_res.get('content', '')[:200]}"
+#     logger.info(f"ask_create_task: LLM response: {local_res.get('content', '')[:200]} ... [truncated]")
+#     tool_name = decision.get("tool")
+#     if not tool_name:
+#         return f"No Tool : {decision.get('reason', '')}"
 
-    tool_name = decision.get("tool")
-    if not tool_name:
-        return f"No Tool : {decision.get('reason', '')}"
+#     task_name = (decision.get("task_name") or "task").strip()
+#     cleaned_request = (decision.get("cleaned_request") or "").strip()
 
-    task_name = (decision.get("task_name") or "task").strip()
-    cleaned_request = (decision.get("cleaned_request") or "").strip()
+#     if not cleaned_request:
+#         return f"Missing cleaned_request: {decision}"
 
-    if not cleaned_request:
-        return f"Missing cleaned_request: {decision}"
+#     args = [cleaned_request]
 
-    args = [cleaned_request]
+#     if tool_name == "add_oneshot_task":
+#         run_date = decision.get("run_date")
+#         if not run_date:
+#             return f"Missing run_date: {decision}"
+#         Utils.add_oneshot_task(
+#             task_id=task_name,
+#             function="dllb_skills.call_ask",
+#             date_or_timestamp=run_date,
+#             description=request_str,
+#             args=args,
+#             hidden="yes",
+#         )
+#         return f"One-shot task '{task_name}' scheduled at {run_date}"
 
-    if tool_name == "add_oneshot_task":
-        run_date = decision.get("run_date")
-        if not run_date:
-            return f"Missing run_date: {decision}"
-        Utils.add_oneshot_task(
-            task_id=task_name,
-            function="dllb_skills.call_ask",
-            date_or_timestamp=run_date,
-            description=request_str,
-            args=args,
-            hidden="yes",
-        )
-        return f"One-shot task '{task_name}' scheduled at {run_date}"
+#     if tool_name == "add_cron_task":
+#         cron = decision.get("cron")
+#         if not cron:
+#             return f"Missing cron: {decision}"
+#         Utils.add_cron_task(
+#             task_id=task_name,
+#             function="dllb_skills.call_ask",
+#             cron_param=cron,
+#             description=request_str,
+#             args=args,
+#             hidden="no",
+#         )
+#         return f"Cron task '{task_name}' scheduled with '{cron}'"
 
-    if tool_name == "add_cron_task":
-        cron = decision.get("cron")
-        if not cron:
-            return f"Missing cron: {decision}"
-        Utils.add_cron_task(
-            task_id=task_name,
-            function="dllb_skills.call_ask",
-            cron_param=cron,
-            description=request_str,
-            args=args,
-            hidden="no",
-        )
-        return f"Cron task '{task_name}' scheduled with '{cron}'"
-
-    return f"Unknown tool: {tool_name}"
+#     return f"Unknown tool: {tool_name}"
 
 def ask_control_multiroom(request_str: str) -> str:
     """
@@ -77,28 +81,31 @@ def ask_control_multiroom(request_str: str) -> str:
     return f'{Utils.send_command_multiroom(request_str)}'
 
 def ask_send_msg(request_str: str) -> str:
-    """Send or broadcast a message: announce a text message on the house speakers or notify the user."""
-    logger.info(f"ask_send_msg: {request_str}")
-    function = dllb_skills.send_announcement
+    """Send, diffuse, relay or schedule a text message to Discord or house speakers, future time means schedule it."""
+    function_name = "send_announcement"
     if 'discord' in request_str.lower():
-        function = dllb_skills.send_msg_discord
+        function_name = "send_msg_discord"
+
     now = datetime.now()
-    system_prompt = f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n" + _build_send_msg_prompt()
+    system_prompt = f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n" + cfg.agents.common_relay_message
     local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
     decision = json.loads(local_res["content"])
-    action = decision.get("send")
+    action = decision.get("send") or decision.get("send_now") or decision.get("tool")
     message = (decision.get("message") or "").strip()
+    if not action:
+        return f"No action: {decision}"
 
-    if action == "send_now":
+    if action in ("send_now", "now", "now_now"):
         if 'discord' in request_str.lower():
             send_msg_discord(message)
         else:
             send_announcement(message)
         return f"Sent: {message}"
+
     if action == "add_oneshot_task":
         Utils.add_oneshot_task(
             task_id=f"msg_{now.strftime('%H%M%S')}",
-            function=function,
+            function=function_name,
             date_or_timestamp=decision.get("run_date"),
             args=[message],
             hidden="yes",

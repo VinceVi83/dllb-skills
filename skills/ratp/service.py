@@ -21,7 +21,7 @@ def _generate_departure_tools():
         def make_dest_func(sec, name_str):
             def func() -> str:
                 my_trip = create_trip(sec)
-                print('go_to_work')
+                logger.debug('go_to_work')
                 msg = my_trip._display_all(reverse=False)
                 Utils.send_discord_notification(msg, channel='notify-me')
                 return msg
@@ -50,11 +50,11 @@ def _generate_departure_tools():
         globals()[ret_name] = make_ret_func(section, ret_name)
         generated_names.extend([dest_name, ret_name])
 
-    print(f"\n[Dynamic Generator] Registering tools into {current_module_name}:")
+    logger.debug(f"\n[Dynamic Generator] Registering tools into {current_module_name}:")
     for name in generated_names:
         func_obj = globals()[name]
-        print(f"  -> Generated: {name}() | Docstring: {repr(func_obj.__doc__)} | Module: {func_obj.__module__}")
-    print()
+        logger.debug(f"  -> Generated: {name}() | Docstring: {repr(func_obj.__doc__)} | Module: {func_obj.__module__}")
+    logger.debug('')
 
 def _generate_itinerary_tools():
     current_module_name = __name__
@@ -100,11 +100,11 @@ def _generate_itinerary_tools():
         globals()[return_name] = make_itinerary_func(end_coord, start_coord, filter_ligne, return_name, return_doc)
         generated_names.append(return_name)
 
-    print(f"\n[Dynamic Itinerary Generator] Registering itinerary tools into {current_module_name}:")
+    logger.debug(f"\n[Dynamic Itinerary Generator] Registering itinerary tools into {current_module_name}:")
     for name in generated_names:
         func_obj = globals()[name]
-        print(f"  -> Generated: {name}() | Docstring: {repr(func_obj.__doc__)} | Module: {func_obj.__module__}")
-    print()
+        logger.debug(f"  -> Generated: {name}() | Docstring: {repr(func_obj.__doc__)} | Module: {func_obj.__module__}")
+    logger.debug('')
 
 def go_home(start, filter=None, departure_time=None):
     """
