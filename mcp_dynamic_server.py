@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 EXCLUDE_DIRS = {"__pycache__", "agents", "data", "index_db"}
 
 ask_tools_registry = {}
-
+resolve_tools_registry = {} 
 
 def find_service_files():
     service_files = []
@@ -43,12 +43,42 @@ def auto_register_tools(mcp_instance):
             logger.error(f"  [Error] Failed to import {mod_name}: {e}")
             continue
         for name, obj in inspect.getmembers(module):
+            if inspect.isfunction(obj) and name.startswith("_resolve_") and obj.__module__ == module.__name__:
+                resolve_tools_registry["ask_" + name[len("_resolve_"):]] = obj
+                continue
+
             is_public_function = inspect.isfunction(obj) and not name.startswith("_")
             if is_public_function and obj.__module__ == module.__name__ and obj.__doc__:
                 logger.debug(f"  -> Found function tool: {name}")
                 mcp_instance.tool()(obj)
                 if name.startswith("ask_"):
                     ask_tools_registry[name] = obj
+
+def _route_to_ask_tool(request_str: str) -> str | None:
+    system_prompt = generate_ask_tools_prompt()
+    raw = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp, mode='summarize')
+    tool_name = raw.get("content", "").strip()
+    if not tool_name or tool_name == "None":
+        return None
+    return tool_name
+
+def resolve(request_str: str) -> dict:
+    tool_name = _route_to_ask_tool(request_str)
+    if not tool_name:
+        return {"error": "No matching ask_* tool found for the request."}
+    if tool_name not in ask_tools_registry:
+        return {"error": f"Unknown ask_* tool: {tool_name}"}
+
+    resolver = resolve_tools_registry.get(tool_name)
+    if resolver is None:
+        fn = ask_tools_registry[tool_name]
+        return {"ask_tool": tool_name,
+                "function": f"{fn.__module__}.{fn.__name__}",
+                "args": {"request_str": request_str}}
+
+    resolved = resolver(request_str)
+    resolved["ask_tool"] = tool_name
+    return resolved
 
 def clean_docstring(docstring):
     if not docstring:
@@ -88,12 +118,9 @@ def generate_ask_tools_prompt():
     return template_content.replace("{{ASK_TOOLS_LIST}}", ask_tools_list)
 
 def ask(request_str: str) -> str:
-    """Route a user request to the appropriate ask_* tool via the LLM."""
     try:
-        system_prompt = generate_ask_tools_prompt()
-        raw = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp, mode='summarize')
-        tool_name = raw.get("content", "").strip()
-        if not tool_name or tool_name == "None":
+        tool_name = _route_to_ask_tool(request_str)
+        if not tool_name:
             return "No matching ask_* tool found for the request."
         if tool_name not in ask_tools_registry:
             logger.warning(f"[ask] unknown tool {tool_name!r}, registry={list(ask_tools_registry)}")
@@ -207,6 +234,7 @@ def create_server() -> FastMCP:
 
     @mcp_instance.tool()
     def call_ask(request_str: str) -> str:
+        """Route a user request to the appropriate ask_* tool via the LLM."""
         return ask(request_str)
 
     @mcp_instance.tool()

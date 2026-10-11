@@ -14,63 +14,66 @@ TEST_CASES = [
     ("Éteins toutes les lumières.", "ask_control_multiroom"),
 ]
 
-# def ask_create_task(request_str: str) -> str:
-#     """Create a one-shot or recurring task that will re-call ask later."""
-#     logger.info(f"ask_create_task: {request_str}")
-#     now = datetime.now()
-#     system_prompt = (
-#         f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')} "
-#         f"({now.strftime('%A')})\n\n"
-#         + cfg.agents.common_create_task
-#     )
+def ask_create_task(request_str: str) -> str:
+    """Create a one-shot or recurring task: the target function and its arguments are resolved now, not at run time."""
+    from mcp_dynamic_server import resolve
 
-#     local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
-#     try:
-#         decision = json.loads(local_res["content"])
-#     except (json.JSONDecodeError, KeyError):
-#         return f"LLM returned invalid JSON: {local_res.get('content', '')[:200]}"
-#     logger.info(f"ask_create_task: LLM response: {local_res.get('content', '')[:200]} ... [truncated]")
-#     tool_name = decision.get("tool")
-#     if not tool_name:
-#         return f"No Tool : {decision.get('reason', '')}"
+    logger.info(f"ask_create_task: {request_str}")
+    now = datetime.now()
+    system_prompt = (
+        f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')} "
+        f"({now.strftime('%A')})\n\n"
+        + cfg.agents.common_create_task
+    )
+    local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
+    try:
+        decision = json.loads(local_res["content"])
+    except (json.JSONDecodeError, KeyError):
+        return f"LLM returned invalid JSON: {local_res.get('content', '')[:200]}"
 
-#     task_name = (decision.get("task_name") or "task").strip()
-#     cleaned_request = (decision.get("cleaned_request") or "").strip()
+    tool_name = decision.get("tool")
+    if not tool_name:
+        return f"No Tool : {decision.get('reason', '')}"
 
-#     if not cleaned_request:
-#         return f"Missing cleaned_request: {decision}"
+    task_name = (decision.get("task_name") or "task").strip()
+    cleaned_request = (decision.get("cleaned_request") or "").strip()
+    if not cleaned_request:
+        return f"Missing cleaned_request: {decision}"
+    resolved = resolve(cleaned_request)
+    if "error" in resolved:
+        return f"Cannot resolve '{cleaned_request}': {resolved['error']}"
 
-#     args = [cleaned_request]
+    target_function = "dllb-skill." + resolved["function"]
+    target_args = list(resolved["args"].values())
 
-#     if tool_name == "add_oneshot_task":
-#         run_date = decision.get("run_date")
-#         if not run_date:
-#             return f"Missing run_date: {decision}"
-#         Utils.add_oneshot_task(
-#             task_id=task_name,
-#             function="dllb_skills.call_ask",
-#             date_or_timestamp=run_date,
-#             description=request_str,
-#             args=args,
-#             hidden="yes",
-#         )
-#         return f"One-shot task '{task_name}' scheduled at {run_date}"
+    if tool_name == "add_oneshot_task":
+        run_date = decision.get("run_date")
+        if not run_date:
+            return f"Missing run_date: {decision}"
+        Utils.add_oneshot_task(
+            task_id=task_name,
+            function=target_function,
+            date_or_timestamp=run_date,
+            description=request_str,
+            args=target_args,
+            hidden="yes",
+        )
+        return f"One-shot task '{task_name}' scheduled at {run_date}: {target_function}{tuple(target_args)}"
 
-#     if tool_name == "add_cron_task":
-#         cron = decision.get("cron")
-#         if not cron:
-#             return f"Missing cron: {decision}"
-#         Utils.add_cron_task(
-#             task_id=task_name,
-#             function="dllb_skills.call_ask",
-#             cron_param=cron,
-#             description=request_str,
-#             args=args,
-#             hidden="no",
-#         )
-#         return f"Cron task '{task_name}' scheduled with '{cron}'"
-
-#     return f"Unknown tool: {tool_name}"
+    if tool_name == "add_cron_task":
+        cron = decision.get("cron")
+        if not cron:
+            return f"Missing cron: {decision}"
+        Utils.add_cron_task(
+            task_id=task_name,
+            function=target_function,
+            cron_param=cron,
+            description=request_str,
+            args=target_args,
+            hidden="no",
+        )
+        return f"Cron task '{task_name}' scheduled with '{cron}': {target_function}{tuple(target_args)}"
+    return f"Unknown tool: {tool_name}"
 
 def ask_control_multiroom(request_str: str) -> str:
     """
@@ -82,19 +85,25 @@ def ask_control_multiroom(request_str: str) -> str:
 
 def ask_send_msg(request_str: str) -> str:
     """Send, diffuse, relay or schedule a text message to Discord or house speakers, future time means schedule it."""
-    function_name = "send_announcement"
+    function_name = "dllb-skill." + "send_announcement"
     if 'discord' in request_str.lower():
-        function_name = "send_msg_discord"
+        function_name = "dllb-skill." + "send_msg_discord"
 
     now = datetime.now()
     system_prompt = f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n" + cfg.agents.common_relay_message
     local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
-    decision = json.loads(local_res["content"])
-    action = decision.get("send") or decision.get("send_now") or decision.get("tool")
-    message = (decision.get("message") or "").strip()
+    try:
+        decision = json.loads(local_res["content"])
+        action = decision.get("send") or decision.get("send_now") or decision.get("tool")
+        message = (decision.get("message") or "").strip()
+    except json.JSONDecodeError:
+        logger.error(f"Invalid JSON response: {local_res['content']}")
+        action = 'send_now'
+        message = request_str.strip()
     if not action:
         return f"No action: {decision}"
 
+    logger.info(f"ask_send_msg: action={action}, message={message}, function={function_name}")
     if action in ("send_now", "now", "now_now"):
         if 'discord' in request_str.lower():
             send_msg_discord(message)

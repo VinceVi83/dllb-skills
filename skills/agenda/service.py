@@ -54,19 +54,21 @@ def _build_tools_prompt() -> str:
     return f"{context}\n\nAvailable tools:\n{tools_prompt}"
 
 
-def ask_agenda(request_str: str) -> str:
-    """Answer any question about the user's agenda, events, calendar, or concerts."""
-
+def _resolve_agenda(request_str: str) -> dict:
+    """
+    Resolve the request without executing it.
+    Return {"function": "<module>.<nom>", "args": {...}} or {"error": "..."}.
+    """
     local_res = llm.call(_build_tools_prompt(), request_str, model=cfg.llm_models.mcp)
     decision = json.loads(local_res['content'])
 
     tool_name = decision.get("tool")
     if not tool_name:
-        return f"No Tool : {decision.get('reason', '')}"
+        return {"error": f"No Tool : {decision.get('reason', '')}"}
 
     fn = globals().get(tool_name)
     if not (fn and inspect.isfunction(fn) and fn.__module__ == __name__):
-        return f"Unknown Tool : {tool_name}"
+        return {"error": f"Unknown Tool : {tool_name}"}
 
     sig = inspect.signature(fn)
     args = {
@@ -74,9 +76,17 @@ def ask_agenda(request_str: str) -> str:
         for k, v in (decision.get("arguments") or {}).items()
         if k in sig.parameters
     }
+    return {"function": f"{__name__}.{tool_name}", "args": args}
 
-    res = str(fn(**args))
-    
+def ask_agenda(request_str: str) -> str:
+    """Answer any question about the user's agenda, events, calendar, or concerts."""
+    resolved = _resolve_agenda(request_str)
+    if "error" in resolved:
+        return resolved["error"]
+
+    tool_name = resolved["function"].rsplit(".", 1)[1]
+    fn = globals()[tool_name]
+    res = str(fn(**resolved["args"]))
     if cfg.debug:
         logger.info(f"Tool called: {tool_name}\n{res if len(res) < 600 else res[:600] + ' ... [truncated]'}")
         return f"Tool called: {tool_name}\n{res}"
