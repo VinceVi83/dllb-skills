@@ -15,7 +15,7 @@ TEST_CASES = [
 ]
 
 def ask_create_task(request_str: str) -> str:
-    """Create a one-shot or recurring task: the target function and its arguments are resolved now, not at run time."""
+    """Schedule a future action (time ref + action to run). Use this in priority for anything time-based."""
     from mcp_dynamic_server import resolve
 
     logger.info(f"ask_create_task: {request_str}")
@@ -43,9 +43,9 @@ def ask_create_task(request_str: str) -> str:
     if "error" in resolved:
         return f"Cannot resolve '{cleaned_request}': {resolved['error']}"
 
-    target_function = "dllb-skill." + resolved["function"]
+    target_function = "dllb-skill." + resolved["function"].split(".")[-1]
     target_args = list(resolved["args"].values())
-
+    logger.debug(f"ask_create_task: tool={tool_name}, task_name={task_name}, function={target_function}, args={target_args}")
     if tool_name == "add_oneshot_task":
         run_date = decision.get("run_date")
         if not run_date:
@@ -85,9 +85,9 @@ def ask_control_multiroom(request_str: str) -> str:
 
 def ask_send_msg(request_str: str) -> str:
     """Send, diffuse, relay or schedule a text message to Discord or house speakers, future time means schedule it."""
-    function_name = "dllb-skill." + "send_announcement"
+    function_name = "dllb-skill.send_announcement"
     if 'discord' in request_str.lower():
-        function_name = "dllb-skill." + "send_msg_discord"
+        function_name = "dllb-skill.send_msg_discord"
 
     now = datetime.now()
     system_prompt = f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n" + cfg.agents.common_relay_message
