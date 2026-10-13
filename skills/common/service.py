@@ -77,8 +77,7 @@ def ask_create_task(request_str: str) -> str:
 
 def ask_control_multiroom(request_str: str) -> str:
     """
-    Control the smart home and multiroom audio: lights, switches, plugs, thermostats (turn on/off, dim, set temperature)
-    in any room, plus speakers and music playback (play, pause, volume, per room).
+    Command about play and control music (play, pause, volume, change music) and control lights, switches, plugs, thermostats (turn on/off, dim, set temperature)
     """
     logger.info(f"ask_control_multiroom: {request_str}")
     return f'{Utils.send_command_multiroom(request_str)}'
