@@ -171,8 +171,8 @@ class CalendarService:
             subject, body = self._format_email_content(
                 next_event["summary"], next_event["dt"], next_event["pdf"]
             )
-            attachment = Path(cfg.agenda.DATA_DIR) / "concert_tickets" / next_event["pdf"]
-
+            attachment = Path(cfg.config_dir).resolve().parent / "concert_tickets" / next_event["pdf"]
+            Utils.send_discord_notification(body, files=[str(attachment)])
             return {
                 "api_name": "send_mail",
                 "subject": subject,

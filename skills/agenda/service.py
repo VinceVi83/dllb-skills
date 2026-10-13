@@ -79,7 +79,7 @@ def _resolve_agenda(request_str: str) -> dict:
     return {"function": f"{__name__}.{tool_name}", "args": args}
 
 def ask_agenda(request_str: str) -> str:
-    """Answer any question about the user's agenda, events, calendar, or concerts."""
+    """Answer any question about the user's agenda, events, calendar, concerts or send upcoming concert's ticket to the user."""
     resolved = _resolve_agenda(request_str)
     if "error" in resolved:
         return resolved["error"]
@@ -149,8 +149,9 @@ def mail_me_next_concert() -> dict:
     Send an email to the user containing the next concert's details and its
     ticket PDF attached. Only use when the user explicitly asks for it by mail.
     """
-    logger.info('')
-    return calendar.mail_me_next_concert()
+    result = calendar.mail_me_next_concert()
+    logger.info('result')
+    return f'{result}'
 
 TEST_CASES = [
     ("What is my agenda for today?", "get_calendar_events_today"),
