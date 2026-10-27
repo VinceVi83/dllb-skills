@@ -122,6 +122,7 @@ def ask_send_msg(request_str: str) -> str:
     return f"No action: {decision}"
 
 def shutdown_server(request_str: str) -> str:
+    """shutdown the server"""
     if isinstance(llm, LLMGatewayClient) :
         return llm._send_wol()
     return "Impossible to shutdown the server from this instance. Please configure LLM Gateway client."

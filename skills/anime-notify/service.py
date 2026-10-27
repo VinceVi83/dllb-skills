@@ -109,15 +109,14 @@ def _extract_and_filter_animes(file_name, hide_releases=False, sort_by_countdown
     return filtered_divs_list, animes_dict
 
 
-def _notif(anime_name):
-    anime = DICO_ANIMES.get(anime_name)
+def _notif(anime):
     if not anime or not anime.timestamp:
         return
 
     mapping_sites = {
         "Mushoku Tensei Ⅲ: Isekai Ittara Honki Dasu": "Crunchyroll"
     }
-    streaming_site = mapping_sites.get(anime_name, "[Streaming site]")
+    streaming_site = mapping_sites.get(anime.name, "[Streaming site]")
 
     discord_alert = (
         f"📢 **New Episode Available!**\n"
@@ -148,19 +147,19 @@ def notify_new_anime():
     scheduled to release today.
     """
     _livechart_scrap()
+    _, dico_animes = _extract_and_filter_animes(target_file, hide_releases=False, sort_by_countdown=True)
     today_start = datetime.now().timestamp()
     today_end = (datetime.now() + timedelta(days=1)).timestamp()
-    for anime in DICO_ANIMES.values():
+    for anime in dico_animes.values():
         if anime.timestamp:
             try:
                 anime_ts = int(anime.timestamp)
                 if today_start <= anime_ts <= today_end:
-                    _notif(anime.name)
+                    _notif(anime)
             except ValueError:
                 pass
 
 target_file = "skills/anime-notify/www_livechart_me_raw.html"
-_, DICO_ANIMES = _extract_and_filter_animes(target_file, hide_releases=False, sort_by_countdown=True)
 
 if __name__ == "__main__":
     setup_logging()
@@ -170,9 +169,10 @@ if __name__ == "__main__":
     now = time.time()
 
     if args.t:
-        valid_animes = [a for a in DICO_ANIMES.values() if a.timestamp]
+        _, dico_animes = _extract_and_filter_animes(target_file, hide_releases=False, sort_by_countdown=True)
+        valid_animes = [a for a in dico_animes.values() if a.timestamp]
         if valid_animes:
             closest_anime = min(valid_animes, key=lambda x: abs(int(x.timestamp) - now))
-            _notif(closest_anime.name)
+            _notif(closest_anime)
     else:
         notify_new_anime()
