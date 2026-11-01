@@ -89,7 +89,7 @@ To test a skill:
        results = []
        for label, req in WEATHER_TEST_CASES:
            # Test each case
-           out = ask_weather_question(req)
+           out = ask_weather_question(label)
            results.append(f"{label}: {out}")
        return "\n".join(results)
    ```

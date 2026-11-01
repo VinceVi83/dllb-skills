@@ -15,7 +15,7 @@ TEST_CASES = [
 ]
 
 def ask_create_task(request_str: str) -> str:
-    """Schedule a future action (time ref + action to run). Use this in priority for anything time-based."""
+    """Ignore if it's about agenda related, Schedule a future action (time ref + action to run). Use this in priority for anything time-based."""
     from mcp_dynamic_server import resolve
 
     logger.info(f"ask_create_task: {request_str}")
@@ -142,13 +142,28 @@ def send_msg_discord(request_str: str) -> str:
 def TU_common():
     results = []
     for label, req in TEST_CASES:
+        fn = globals().get(req)
+        if not callable(fn):
+            logger.error(f"=== {label} ===> {req}  [NOT FOUND]")
+            results.append(f"{label}: function '{req}' not found")
+            continue
+
         logger.info(f"=== {label} ===> {req}")
         try:
-            out = ask_common(req)
+            out = fn(label)
         except Exception:
-            logger.exception("ask_agenda crashed")
+            logger.exception(f"{req} crashed")
+            results.append(f"{label}: CRASH")
             continue
+
         if out:
-            results.append(f"{label}: {out if len(out) < 600 else out[:600] + ' ... [truncated]'}")
-            logger.info(out if len(out) < 600 else out[:600] + " ... [truncated]")
+            out_short = out if len(out) < 600 else out[:600] + " ... [truncated]"
+            results.append(f"{label}: {out_short}")
+            logger.info(out_short)
+
     return "\n".join(results)
+
+
+if __name__ == "__main__":
+    setup_logging()
+    TU_common()

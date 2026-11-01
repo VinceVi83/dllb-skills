@@ -3,10 +3,11 @@ import json
 import logging
 
 from skills.agenda.calendar import CalendarService
-from common.conf_manager import cfg, setup_logging
 from common.llm_client import llm
 from datetime import datetime
+import skills.agenda.ticket_pipeline as ticket_pipeline
 
+from common.conf_manager import cfg, setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
@@ -50,10 +51,6 @@ def _build_tools_prompt() -> str:
         json.dumps(tools, indent=2, ensure_ascii=False, default=str),
     )
 
-    tools_prompt = json.dumps(tools, indent=2, ensure_ascii=False, default=str)
-    return f"{context}\n\nAvailable tools:\n{tools_prompt}"
-
-
 def _resolve_agenda(request_str: str) -> dict:
     """
     Resolve the request without executing it.
@@ -79,19 +76,21 @@ def _resolve_agenda(request_str: str) -> dict:
     return {"function": f"{__name__}.{tool_name}", "args": args}
 
 def ask_agenda(request_str: str) -> str:
-    """Answer any question about the user's agenda, events, calendar, concerts or send upcoming concert's ticket to the user."""
+    """Answer any question about the user's agenda, events, calendar, concerts or send upcoming concert's ticket to the user, or add an event or ticket (file path like ~/test2.pdf or URL)."""
     resolved = _resolve_agenda(request_str)
     if "error" in resolved:
         return resolved["error"]
 
     tool_name = resolved["function"].rsplit(".", 1)[1]
+    if tool_name == "create_ticket_event":
+        res = create_ticket_event(request_str)
+        return f"Tool called: {tool_name}\n{res}"
     fn = globals()[tool_name]
     res = str(fn(**resolved["args"]))
     if cfg.debug:
         logger.info(f"Tool called: {tool_name}\n{res if len(res) < 600 else res[:600] + ' ... [truncated]'}")
         return f"Tool called: {tool_name}\n{res}"
     return res
-
 
 def get_calendar_events_today() -> list[dict]:
     """Get all calendar events happening today (right now)."""
@@ -153,6 +152,16 @@ def mail_me_next_concert() -> dict:
     logger.info('result')
     return f'{result}'
 
+def create_ticket_event(pdf: str) -> dict:
+    """Add a ticket. Args: pdf - the file path (e.g. ~/test2.pdf) or http(s) URL from the user's message."""
+    logger.info(f'{pdf}')
+    return ticket_pipeline.create_spectacle_from_ticket(pdf)
+
+def create_event_from_text(user_prompt: str) -> dict:
+    """Create a calendar event from a free-form description."""
+    logger.info(f'{user_prompt}')
+    return ticket_pipeline.create_event_from_text(user_prompt)
+
 TEST_CASES = [
     ("What is my agenda for today?", "get_calendar_events_today"),
     ("What is my agenda for tomorrow?", "get_calendar_events_tomorrow"),
@@ -163,16 +172,18 @@ TEST_CASES = [
     ("What is my next event?", "get_next_calendar_event"),
     ("What is my next concert?", "get_next_concert"),
     ("Mail me my next concert info", "mail_me_next_concert"),
+    ("Create an event: dentist appointment tomorrow at 2pm on teams", "create_event_from_text"),
+    ("Ajoute cet event à l'agenda: ~/test2.pdf", "create_ticket_event"),
+    # ("Add this ticket: https://example.com/ticket.pdf", "create_ticket_event"),
     ("Tell me a joke", None),
 ]
-
 
 def TU_agenda():
     results = []
     for label, req in TEST_CASES:
         logger.info(f"=== {label} ===> {req}")
         try:
-            out = ask_agenda(req)
+            out = ask_agenda(label)
         except Exception:
             logger.exception("ask_agenda crashed")
             continue
@@ -180,7 +191,6 @@ def TU_agenda():
             results.append(f"{label}: {out if len(out) < 600 else out[:600] + ' ... [truncated]'}")
             logger.info(out if len(out) < 600 else out[:600] + " ... [truncated]")
     return "\n".join(results)
-
 
 if __name__ == "__main__":
     TU_agenda()
