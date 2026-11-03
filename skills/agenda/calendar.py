@@ -14,7 +14,7 @@ class CalendarService:
     """Calendar Service Plugin."""
 
     def __init__(self):
-        self.index_path = Path(cfg.config_dir) / "concert_tickets/concerts.json"
+        self.index_path = Path(cfg.config_dir.parent) / cfg.agenda.calendar.filename
         self.index_path.parent.mkdir(parents=True, exist_ok=True)
         if self.index_path.exists():
             data = json.loads(self.index_path.read_text())

@@ -6,13 +6,13 @@ import tempfile
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-
+import requests
 import pdfplumber
 import pypdfium2 as pdfium
 import pytesseract
 
 from common.llm_client import llm
-from common.conf_manager import cfg, setup_logging
+from common.conf_manager import cfg, setup_logging, Utils
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ TESS_LANG = "fra+eng"
 TICKET_FIELDS = ("artist", "venue", "date")
 EVENT_FIELDS = ("event_name", "localisation", "date")
 
-_URL_RE = re.compile(r"https?://\S+")
+_URL_RE = re.compile(r'https?://[^\s"\'<>]+|~?/[^\s"\'<>]+')
 
 FIELD_PROMPTS = {
     "artist": (
@@ -66,13 +66,31 @@ def _filename_from_url(url: str) -> str:
         name += ".pdf"
     return name or "ticket.pdf"
 
+_CDN_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    ),
+    "Referer": "https://discord.com/",
+}
+
 def _resolve_local(payload: str) -> tuple[Path, str]:
-    if _URL_RE.search(payload):
+    payload = payload.strip()
+    if payload.startswith(("http://", "https://")):
         suffix = ".pdf" if payload.split("?")[0].lower().endswith(".pdf") else ".bin"
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
         tmp.close()
-        with urllib.request.urlopen(payload, timeout=30) as resp, open(tmp.name, "wb") as f:
-            shutil.copyfileobj(resp, f)
+        with requests.get(payload, headers=_CDN_HEADERS, stream=True, timeout=30) as resp:
+            if resp.status_code in (403, 404, 410):
+                raise RuntimeError(
+                    f"ticket download failed ({resp.status_code}) — "
+                    "Discord link likely expired, re-upload the file"
+                )
+            resp.raise_for_status()
+            with open(tmp.name, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=64 * 1024):
+                    if chunk:
+                        f.write(chunk)
         return Path(tmp.name), _filename_from_url(payload)
     path = Path(payload).expanduser()
     if not path.is_file():
@@ -253,6 +271,7 @@ def _render_ics(name: str, date: str, location: str) -> str:
 def _write_ics(name: str, date: str, location: str = "") -> Path:
     out_path = Path(cfg.config_dir) / f"{_slug(name)}.ics"
     out_path.write_text(_render_ics(name, date, location), encoding="utf-8")
+    Utils.send_discord_notification(f'New event created : {name}', channel='notify-tmp' , files=[str(out_path)])
     return out_path
 
 def _append_event_json(key: str, entry: dict) -> None:
@@ -272,18 +291,16 @@ def _event_title(artist: str, date: str | None) -> str | None:
 def create_spectacle_from_ticket(payload: str) -> dict:
     if not isinstance(payload, str):
         raise TypeError(f"payload must be str, got {type(payload).__name__}")
-    if not (_URL_RE.search(payload) or payload.startswith(('/', '~'))):
-        m = re.compile(r'(?:~?/[^\s"\']+|https?://[^\s"\']+)').search(payload)
-        if not m:
-            raise ValueError(f"no ticket source in: {payload!r}")
-        payload = m.group(0)
 
+    match = _URL_RE.search(payload)
+    if not match:
+        raise ValueError(f"no ticket source in: {payload!r}")
+    source = match.group(0).rstrip('.,;:)]}')
     logger.info("create_spectacle_from_ticket")
-    path, name = _resolve_local(payload)
+    path, name = _resolve_local(source)
     text = _extract_text(path)
     stored = _store_ticket_file(path, name)
     logger.info(f"ticket stored: {stored}")
-
     ticket = _extract_all(text, TICKET_FIELDS, cfg.agenda.forbidden_info)
     artist = ticket.get("artist")
     venue = ticket.get("venue") or "Unknown venue"

@@ -3,11 +3,12 @@ import json
 import logging
 
 from skills.agenda.calendar import CalendarService
+from common.conf_manager import cfg, setup_logging
 from common.llm_client import llm
 from datetime import datetime
 import skills.agenda.ticket_pipeline as ticket_pipeline
+import re
 
-from common.conf_manager import cfg, setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,10 @@ def mail_me_next_concert() -> dict:
 def create_ticket_event(pdf: str) -> dict:
     """Add a ticket. Args: pdf - the file path (e.g. ~/test2.pdf) or http(s) URL from the user's message."""
     logger.info(f'{pdf}')
-    return ticket_pipeline.create_spectacle_from_ticket(pdf)
+    match = re.search(r'https?://[^\s"\'<>]+|~?/[^\s"\'<>]+', pdf)
+    if not match:
+        return "Failed: no ticket URL or path found"
+    return ticket_pipeline.create_spectacle_from_ticket(match.group(0))
 
 def create_event_from_text(user_prompt: str) -> dict:
     """Create a calendar event from a free-form description."""
