@@ -4,7 +4,7 @@ import json
 from thefuzz import fuzz
 from datetime import datetime, timedelta
 from pathlib import Path
-from common.conf_manager import cfg, setup_logging, Utils
+from common.conf_manager import cfg, Utils
 import logging
 
 logger = logging.getLogger(__name__)
@@ -185,7 +185,6 @@ class CalendarService:
 
 
 if __name__ == "__main__":
-    setup_logging()
     calendar = CalendarService()
     
     print("Today     :", calendar.get_today_events())

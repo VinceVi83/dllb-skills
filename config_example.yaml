@@ -1,23 +1,7 @@
-llm:
-  lan_url:
-    local_url: http://127.0.0.1:11434
-  wan_url:
-    wan_url: null
-llm_gateway:
-  port: '8000'
-  server_ip: 192.168.0.XXX
-  server_mac: aa:aa:aa:aa:aa:aa
-  wakeup_port: 9999
-
-llm_models:
-    creative: qwen2.5:32b-instruct-q4_K_M
-    mcp: qwen2.5:32b-instruct-q4_K_M
-
 home_assistant:
   ha_token: ha_token
   ha_hostname: 192.168.0.YYY
   ha_weather_location: weather.paris
-
 ratp:
   token: token
   location:

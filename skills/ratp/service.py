@@ -1,6 +1,6 @@
 from skills.ratp.departure_alert_ratp import Trip, Line, fetch_itinerary
 from datetime import datetime
-from common.conf_manager import cfg, setup_logging, Utils
+from common.conf_manager import cfg, Utils
 
 import logging
 logger = logging.getLogger(__name__)

@@ -12,7 +12,7 @@ import pypdfium2 as pdfium
 import pytesseract
 
 from common.llm_client import llm
-from common.conf_manager import cfg, setup_logging, Utils
+from common.conf_manager import cfg, Utils
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ def _json_loads(raw: str) -> dict:
             return {}
 
 def _llm_json(system_prompt: str, user_prompt: str) -> dict:
-    res = llm.call(system_prompt, user_prompt, model=cfg.llm_models.mcp, mode="extract")
+    res = llm.call(system_prompt, user_prompt, model=cfg.common.llm_gateway.model.mcp, mode="extract")
     out = _json_loads(res.get("content", ""))
     if isinstance(out, list) and len(out) == 1 and isinstance(out[0], dict):
         return out[0]
@@ -341,7 +341,7 @@ def _make_description(fields: dict, fallback: str) -> str:
             "Summarize this appointment in one short line, in English. "
             "No quotes, no preamble, no trailing punctuation. Reply with the summary only.",
             seed,
-            model=cfg.llm_models.mcp,
+            model=cfg.common.llm_gateway.model.mcp,
             mode="extract",
         )
         if isinstance(res, dict):
@@ -380,7 +380,6 @@ def handle_ticket(user_prompt: str) -> dict:
     return create_event_from_text(user_prompt)
 
 if __name__ == "__main__":
-    setup_logging()
     logger.info("=== create_event_ics ===")
     logger.info(create_event_ics(
         name="Dentist",

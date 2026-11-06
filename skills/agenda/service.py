@@ -3,13 +3,12 @@ import json
 import logging
 
 from skills.agenda.calendar import CalendarService
-from common.conf_manager import cfg, setup_logging
+from common.conf_manager import cfg
 from common.llm_client import llm
 from datetime import datetime
 import skills.agenda.ticket_pipeline as ticket_pipeline
 import re
 
-setup_logging()
 logger = logging.getLogger(__name__)
 
 calendar = CalendarService()
@@ -57,7 +56,7 @@ def _resolve_agenda(request_str: str) -> dict:
     Resolve the request without executing it.
     Return {"function": "<module>.<nom>", "args": {...}} or {"error": "..."}.
     """
-    local_res = llm.call(_build_tools_prompt(), request_str, model=cfg.llm_models.mcp)
+    local_res = llm.call(_build_tools_prompt(), request_str, model=cfg.common.llm_gateway.model.mcp)
     decision = json.loads(local_res['content'])
 
     tool_name = decision.get("tool")

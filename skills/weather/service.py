@@ -1,9 +1,8 @@
 import logging
 from skills.weather.weather import WeatherHaApi
-from common.conf_manager import cfg, setup_logging
+from common.conf_manager import cfg
 from common.llm_client import llm
 
-setup_logging()
 logger = logging.getLogger(__name__)
 
 ha_weather = WeatherHaApi()

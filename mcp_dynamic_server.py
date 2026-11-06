@@ -5,12 +5,11 @@ import importlib
 import inspect
 from pathlib import Path
 import asyncio
-from common.conf_manager import cfg, setup_logging
+from common.conf_manager import cfg
 from common.llm_client import llm
 from fastmcp import FastMCP
 import traceback
 import logging
-setup_logging()
 logger = logging.getLogger(__name__)
 
 EXCLUDE_DIRS = {"__pycache__", "agents", "data", "index_db"}
@@ -56,7 +55,7 @@ def auto_register_tools(mcp_instance):
 
 def _route_to_ask_tool(request_str: str) -> str | None:
     system_prompt = generate_ask_tools_prompt()
-    raw = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp, mode='summarize')
+    raw = llm.call(system_prompt, request_str, model=cfg.common.llm_gateway.model.mcp, mode='summarize')
     tool_name = raw.get("content", "").strip()
     if not tool_name or tool_name == "None":
         return None
@@ -340,4 +339,4 @@ if __name__ == "__main__":
             unit_test_tool = find_tool_by_name(tools_list, "run_all_unit_tests")
             asyncio.run(unit_test_tool.run({}))
     else:
-        mcp.run(transport="sse", host="0.0.0.0", port=13316)
+        mcp.run(transport="sse", host="0.0.0.0", port=cfg.common.dllb_skills.port)

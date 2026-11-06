@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from PIL import Image, ImageDraw, ImageFont
 from common.llm_client import llm
-from common.conf_manager import cfg, Utils, setup_logging
+from common.conf_manager import cfg, Utils
 
 import logging
 logger = logging.getLogger(__name__)
@@ -377,7 +377,6 @@ class WeatherHaApi:
 
 if __name__ == "__main__":
     try:
-        setup_logging()
         logger = logging.getLogger(__name__)
         ha_weather = WeatherHaApi()
         ha_weather.run_weather_mode("current")

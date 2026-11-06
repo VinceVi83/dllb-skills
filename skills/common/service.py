@@ -1,4 +1,4 @@
-from common.conf_manager import cfg, setup_logging, Utils
+from common.conf_manager import cfg, Utils
 from common.llm_client import llm
 from datetime import datetime
 import json
@@ -25,7 +25,7 @@ def ask_create_task(request_str: str) -> str:
         f"({now.strftime('%A')})\n\n"
         + cfg.agents.common_create_task
     )
-    local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
+    local_res = llm.call(system_prompt, request_str, model=cfg.common.llm_gateway.model.mcp)
     try:
         decision = json.loads(local_res["content"])
     except (json.JSONDecodeError, KeyError):
@@ -90,7 +90,7 @@ def ask_send_msg(request_str: str) -> str:
 
     now = datetime.now()
     system_prompt = f"Current datetime: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n" + cfg.agents.common_relay_message
-    local_res = llm.call(system_prompt, request_str, model=cfg.llm_models.mcp)
+    local_res = llm.call(system_prompt, request_str, model=cfg.common.llm_gateway.model.mcp)
     try:
         decision = json.loads(local_res["content"])
         action = decision.get("send") or decision.get("send_now") or decision.get("tool")
@@ -165,5 +165,4 @@ def TU_common():
 
 
 if __name__ == "__main__":
-    setup_logging()
     TU_common()
